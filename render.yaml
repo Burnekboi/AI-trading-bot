@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: ai-trade-simulator-bot
+    runtime: node
+    repo: https://github.com/YOUR_USERNAME/YOUR_REPO_NAME
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_PATH
+        value: /var/data/simulator.db
+      - key: MEXC_API_BASE
+        value: https://api.mexc.com/api/v3
+      - key: LEVERAGE
+        value: "10"
+      - key: DEFAULT_BALANCE
+        value: "100"
+      - key: POSITION_POLL_INTERVAL_MS
+        value: "5000"
+      - key: SCAN_TOP_N
+        value: "30"
+      - key: MIN_QUOTE_VOLUME
+        value: "500000"
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
