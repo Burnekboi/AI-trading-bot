@@ -1,4 +1,4 @@
-import type { ActivePosition, ClosePositionResult } from '../types';
+import type { ActivePosition, ClosePositionResult, PerformanceRecord } from '../types';
 import {
   directionEmoji,
   formatBalance,
@@ -87,6 +87,56 @@ export const PROMPT_LIMIT_DURATION =
 
 export const PROMPT_LIMIT_AMOUNT =
   '💰 Enter the virtual USDT amount for your limit trade (e.g., 20):';
+
+export function buildActivityText(
+  openCount: number,
+  closedCount: number
+): string {
+  return (
+    `<b>📊 ACTIVITY</b>\n\n` +
+    `<pre>Open(Active)          Closed(Ended,Cancelled)\n` +
+    `${String(openCount).padEnd(23)}${closedCount}</pre>`
+  );
+}
+
+export function buildActivityListText(
+  activePositions: ActivePosition[],
+  closedRecords: PerformanceRecord[]
+): string {
+  const lines: string[] = [];
+
+  const header = 'Pair           Margin  Pos.   Status      PnL';
+  lines.push(`<b>📋 Activity List</b>\n\n<pre>${header}`);
+
+  if (activePositions.length === 0 && closedRecords.length === 0) {
+    lines.push('No trades yet.');
+    lines.push('</pre>');
+    return lines.join('\n');
+  }
+
+  for (const p of activePositions) {
+    const pair = formatSymbolDisplay(p.symbol);
+    const margin = `${p.allocatedAmount.toFixed(0)}USDT`;
+    const status = 'Active';
+    lines.push(
+      `${pair.padEnd(15)}${margin.padEnd(8)}${p.direction.padEnd(7)}${status.padEnd(11)}n/a`
+    );
+  }
+
+  for (const r of closedRecords) {
+    const pair = formatSymbolDisplay(r.symbol);
+    const margin = r.allocatedAmount > 0 ? `${r.allocatedAmount.toFixed(0)}USDT` : '-';
+    const status = r.closingStatus;
+    const sign = r.pnlUsdt >= 0 ? '+' : '';
+    const pnl = `${sign}${r.pnlUsdt.toFixed(2)}USDT`;
+    lines.push(
+      `${pair.padEnd(15)}${margin.padEnd(8)}${r.direction.padEnd(7)}${status.padEnd(11)}${pnl}`
+    );
+  }
+
+  lines.push('</pre>');
+  return lines.join('\n');
+}
 
 export function buildStatsText(
   totalBalance: number,

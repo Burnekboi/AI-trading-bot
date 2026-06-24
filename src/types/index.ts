@@ -44,6 +44,8 @@ export interface PerformanceRecord {
   exitPrice: number;
   stopLoss: number | null;
   targetProfit: number | null;
+  allocatedAmount: number;
+  closingStatus: 'Ended' | 'Cancelled';
   pnlUsdt: number;
   wasProfitable: boolean;
   createdAt?: number;

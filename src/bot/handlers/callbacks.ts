@@ -21,11 +21,13 @@ import {
   AI_SCANNING_TEXT,
   PROMPT_LIMIT_AMOUNT,
   buildActivePositionText,
+  buildActivityListText,
+  buildActivityText,
   buildClosedPositionText,
   buildDashboardText,
   buildStatsText,
 } from '../messages';
-import { backKeyboard, mainDashboardKeyboard, positionKeyboard, statsKeyboard } from '../keyboards';
+import { activityKeyboard, activityListKeyboard, backKeyboard, mainDashboardKeyboard, positionKeyboard, statsKeyboard } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
 
 async function deletePromptMessages(
@@ -373,6 +375,71 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
       parse_mode: 'HTML',
       ...mainDashboardKeyboard(hasPositions),
     });
+  });
+}
+
+export function registerActivityHandlers(bot: Telegraf<Context>): void {
+  bot.action('open_activity', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const openPositions = await getUserPositions(chatId);
+    const closedRecords = await getUserPerformance(chatId);
+    const openCount = openPositions.length;
+    const closedCount = closedRecords.length;
+    const text = buildActivityText(openCount, closedCount);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...activityKeyboard(),
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...activityKeyboard(),
+      });
+    }
+  });
+
+  bot.action('list_activity', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const openPositions = await getUserPositions(chatId);
+    const closedRecords = await getUserPerformance(chatId);
+    const text = buildActivityListText(openPositions, closedRecords);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...activityListKeyboard(),
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...activityListKeyboard(),
+      });
+    }
+  });
+
+  bot.action('back_to_activity', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const openPositions = await getUserPositions(chatId);
+    const closedRecords = await getUserPerformance(chatId);
+    const text = buildActivityText(openPositions.length, closedRecords.length);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...activityKeyboard(),
+      });
+    }
   });
 }
 

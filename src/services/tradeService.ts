@@ -87,9 +87,20 @@ export async function executeMultipleTrades(
     );
   }
 
-  const decisions = await runMarketSweepTopN(count);
+  const existingPositions = await getUserPositions(chatId);
+  const heldSymbols = new Set(existingPositions.map(p => p.symbol));
 
-  return decisions.map((decision) => ({
+  const decisions = await runMarketSweepTopN(count + heldSymbols.size);
+
+  const freshDecisions = decisions
+    .filter(d => !heldSymbols.has(d.symbol))
+    .slice(0, count);
+
+  if (freshDecisions.length === 0) {
+    throw new Error('No new coin pairs available to trade.');
+  }
+
+  return freshDecisions.map((decision) => ({
     chatId,
     messageId: 0,
     symbol: decision.symbol,
@@ -209,6 +220,8 @@ async function closePositionById(
     exitPrice,
     stopLoss: position.stopLoss,
     targetProfit: position.targetProfit,
+    allocatedAmount: position.allocatedAmount,
+    closingStatus: status === 'Ended..' ? 'Ended' : 'Cancelled',
     pnlUsdt,
     wasProfitable: pnlUsdt > 0,
   });

@@ -47,3 +47,7 @@ CREATE TABLE IF NOT EXISTS strategy_penalties (
   penalty_multiplier DOUBLE PRECISION NOT NULL DEFAULT 1.0,
   PRIMARY KEY (strategy_name, symbol)
 );
+
+-- Add new columns for activity feature (run if table already exists)
+ALTER TABLE performance_log ADD COLUMN IF NOT EXISTS allocated_amount DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE performance_log ADD COLUMN IF NOT EXISTS closing_status TEXT NOT NULL DEFAULT 'Ended' CHECK(closing_status IN ('Ended', 'Cancelled'));
