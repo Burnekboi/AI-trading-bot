@@ -10,13 +10,14 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user) {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
 
-    const hasPositions = getUserPositions(chatId).length > 0;
+    const positions = await getUserPositions(chatId);
+    const hasPositions = positions.length > 0;
     const text = buildDashboardText(
       user.address,
       user.usdtBalance,

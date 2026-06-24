@@ -1,4 +1,4 @@
-import { getDatabase } from '../db/database';
+import { supabase } from '../db/database';
 import { logPerformance, getRecentPerformance } from '../db/repositories/performance';
 import type { PerformanceRecord, StrategyPenalty } from '../types';
 
@@ -6,26 +6,18 @@ const CONSECUTIVE_LOSS_THRESHOLD = 3;
 const PENALTY_PER_LOSS = 0.15;
 const MIN_PENALTY_MULTIPLIER = 0.3;
 
-export function getStrategyPenalty(
+export async function getStrategyPenalty(
   strategyName: string,
   symbol: string
-): StrategyPenalty {
-  const row = getDatabase()
-    .prepare(
-      `SELECT strategy_name, symbol, consecutive_losses, penalty_multiplier
-       FROM strategy_penalties
-       WHERE strategy_name = ? AND symbol = ?`
-    )
-    .get(strategyName, symbol) as
-    | {
-        strategy_name: string;
-        symbol: string;
-        consecutive_losses: number;
-        penalty_multiplier: number;
-      }
-    | undefined;
+): Promise<StrategyPenalty> {
+  const { data, error } = await supabase
+    .from('strategy_penalties')
+    .select('*')
+    .eq('strategy_name', strategyName)
+    .eq('symbol', symbol)
+    .maybeSingle();
 
-  if (!row) {
+  if (error || !data) {
     return {
       strategyName,
       symbol,
@@ -35,37 +27,39 @@ export function getStrategyPenalty(
   }
 
   return {
-    strategyName: row.strategy_name,
-    symbol: row.symbol,
-    consecutiveLosses: row.consecutive_losses,
-    penaltyMultiplier: row.penalty_multiplier,
+    strategyName: data.strategy_name,
+    symbol: data.symbol,
+    consecutiveLosses: data.consecutive_losses,
+    penaltyMultiplier: data.penalty_multiplier,
   };
 }
 
-function upsertPenalty(
+async function upsertPenalty(
   strategyName: string,
   symbol: string,
   consecutiveLosses: number,
   penaltyMultiplier: number
-): void {
-  getDatabase()
-    .prepare(
-      `INSERT INTO strategy_penalties (strategy_name, symbol, consecutive_losses, penalty_multiplier)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(strategy_name, symbol) DO UPDATE SET
-         consecutive_losses = excluded.consecutive_losses,
-         penalty_multiplier = excluded.penalty_multiplier`
-    )
-    .run(strategyName, symbol, consecutiveLosses, penaltyMultiplier);
+): Promise<void> {
+  const { error } = await supabase.from('strategy_penalties').upsert(
+    {
+      strategy_name: strategyName,
+      symbol,
+      consecutive_losses: consecutiveLosses,
+      penalty_multiplier: penaltyMultiplier,
+    },
+    { onConflict: 'strategy_name, symbol' }
+  );
+
+  if (error) throw error;
 }
 
-export function recordTradeOutcome(record: PerformanceRecord): void {
-  logPerformance(record);
+export async function recordTradeOutcome(record: PerformanceRecord): Promise<void> {
+  await logPerformance(record);
 
-  const penalty = getStrategyPenalty(record.strategyName, record.symbol);
+  const penalty = await getStrategyPenalty(record.strategyName, record.symbol);
 
   if (record.wasProfitable) {
-    upsertPenalty(record.strategyName, record.symbol, 0, 1.0);
+    await upsertPenalty(record.strategyName, record.symbol, 0, 1.0);
     return;
   }
 
@@ -80,7 +74,7 @@ export function recordTradeOutcome(record: PerformanceRecord): void {
     );
   }
 
-  upsertPenalty(
+  await upsertPenalty(
     record.strategyName,
     record.symbol,
     newConsecutiveLosses,
@@ -88,26 +82,30 @@ export function recordTradeOutcome(record: PerformanceRecord): void {
   );
 }
 
-export function getPenaltyMultiplier(
+export async function getPenaltyMultiplier(
   strategyName: string,
   symbol: string
-): number {
-  return getStrategyPenalty(strategyName, symbol).penaltyMultiplier;
+): Promise<number> {
+  const penalty = await getStrategyPenalty(strategyName, symbol);
+  return penalty.penaltyMultiplier;
 }
 
-export function getConsecutiveLosses(
+export async function getConsecutiveLosses(
   strategyName: string,
   symbol: string
-): number {
-  return getStrategyPenalty(strategyName, symbol).consecutiveLosses;
+): Promise<number> {
+  const penalty = await getStrategyPenalty(strategyName, symbol);
+  return penalty.consecutiveLosses;
 }
 
-export function getStrategyStats(
+export async function getStrategyStats(
   strategyName: string,
   symbol: string
-): { recent: PerformanceRecord[]; penalty: StrategyPenalty } {
-  return {
-    recent: getRecentPerformance(strategyName, symbol),
-    penalty: getStrategyPenalty(strategyName, symbol),
-  };
+): Promise<{ recent: PerformanceRecord[]; penalty: StrategyPenalty }> {
+  const [recent, penalty] = await Promise.all([
+    getRecentPerformance(strategyName, symbol),
+    getStrategyPenalty(strategyName, symbol),
+  ]);
+
+  return { recent, penalty };
 }

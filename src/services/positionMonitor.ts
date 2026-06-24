@@ -20,7 +20,7 @@ export function startPositionMonitor(bot: Telegraf): void {
   if (monitorInterval) return;
 
   monitorInterval = setInterval(async () => {
-    const positions = getAllActivePositions();
+    const positions = await getAllActivePositions();
 
     for (const position of positions) {
       try {
@@ -46,13 +46,17 @@ export function startPositionMonitor(bot: Telegraf): void {
         );
         const text = buildClosedPositionText(position, result);
 
-        await bot.telegram.editMessageText(
-          position.chatId,
-          position.messageId,
-          undefined,
-          text,
-          { parse_mode: 'HTML' }
-        );
+        try {
+          await bot.telegram.editMessageText(
+            position.chatId,
+            position.messageId,
+            undefined,
+            text,
+            { parse_mode: 'HTML' }
+          );
+        } catch {
+          // Message may have been deleted
+        }
 
         if (slHit) {
           const next = await autoStartTrade(position.chatId);
@@ -95,7 +99,8 @@ export async function refreshActivePositionCard(
   bot: Telegraf,
   chatId: number
 ): Promise<void> {
-  const positions = getAllActivePositions().filter((p) => p.chatId === chatId);
+  const all = await getAllActivePositions();
+  const positions = all.filter((p) => p.chatId === chatId);
   for (const position of positions) {
     const text = buildActivePositionText(position);
     await bot.telegram.editMessageText(

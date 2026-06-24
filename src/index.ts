@@ -1,14 +1,13 @@
 import http from 'http';
 import { config } from './config';
-import { getDatabase, closeDatabase } from './db/database';
+import { initDatabase } from './db/database';
 import { createBot } from './bot';
 import { stopPositionMonitor } from './services/positionMonitor';
 
 const PORT = Number(process.env.PORT ?? 3000);
 
 async function main(): Promise<void> {
-  getDatabase();
-  console.log('Database initialized');
+  await initDatabase();
 
   const bot = createBot(config.botToken);
 
@@ -31,7 +30,6 @@ async function main(): Promise<void> {
     stopPositionMonitor();
     bot.stop(signal);
     server.close();
-    closeDatabase();
     process.exit(0);
   };
 

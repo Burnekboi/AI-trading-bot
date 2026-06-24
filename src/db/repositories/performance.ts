@@ -1,56 +1,39 @@
-import { getDatabase } from '../database';
+import { supabase } from '../database';
 import type { PerformanceRecord } from '../../types';
 
-export function logPerformance(record: PerformanceRecord): void {
-  getDatabase()
-    .prepare(
-      `INSERT INTO performance_log
-       (chat_id, strategy_name, symbol, direction, entry_price, exit_price, stop_loss, target_profit, pnl_usdt, was_profitable)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      record.chatId,
-      record.strategyName,
-      record.symbol,
-      record.direction,
-      record.entryPrice,
-      record.exitPrice,
-      record.stopLoss,
-      record.targetProfit,
-      record.pnlUsdt,
-      record.wasProfitable ? 1 : 0
-    );
+export async function logPerformance(record: PerformanceRecord): Promise<void> {
+  const { error } = await supabase.from('performance_log').insert({
+    chat_id: record.chatId,
+    strategy_name: record.strategyName,
+    symbol: record.symbol,
+    direction: record.direction,
+    entry_price: record.entryPrice,
+    exit_price: record.exitPrice,
+    stop_loss: record.stopLoss,
+    target_profit: record.targetProfit,
+    pnl_usdt: record.pnlUsdt,
+    was_profitable: record.wasProfitable ? 1 : 0,
+  });
+
+  if (error) throw error;
 }
 
-export function getRecentPerformance(
+export async function getRecentPerformance(
   strategyName: string,
   symbol: string,
   limit = 5
-): PerformanceRecord[] {
-  const rows = getDatabase()
-    .prepare(
-      `SELECT chat_id, strategy_name, symbol, direction, entry_price, exit_price,
-               stop_loss, target_profit, pnl_usdt, was_profitable, created_at
-        FROM performance_log
-        WHERE strategy_name = ? AND symbol = ?
-        ORDER BY created_at DESC
-        LIMIT ?`
-    )
-    .all(strategyName, symbol, limit) as Array<{
-    chat_id: number;
-    strategy_name: string;
-    symbol: string;
-    direction: string;
-    entry_price: number;
-    exit_price: number;
-    stop_loss: number | null;
-    target_profit: number | null;
-    pnl_usdt: number;
-    was_profitable: number;
-    created_at: number;
-  }>;
+): Promise<PerformanceRecord[]> {
+  const { data, error } = await supabase
+    .from('performance_log')
+    .select('*')
+    .eq('strategy_name', strategyName)
+    .eq('symbol', symbol)
+    .order('created_at', { ascending: false })
+    .limit(limit);
 
-  return rows.map((row) => ({
+  if (error || !data) return [];
+
+  return data.map((row) => ({
     chatId: row.chat_id,
     strategyName: row.strategy_name,
     symbol: row.symbol,
@@ -65,34 +48,20 @@ export function getRecentPerformance(
   }));
 }
 
-export function getUserPerformance(
+export async function getUserPerformance(
   chatId: number,
   limit = 50
-): PerformanceRecord[] {
-  const rows = getDatabase()
-    .prepare(
-      `SELECT chat_id, strategy_name, symbol, direction, entry_price, exit_price,
-               stop_loss, target_profit, pnl_usdt, was_profitable, created_at
-        FROM performance_log
-        WHERE chat_id = ?
-        ORDER BY created_at DESC
-        LIMIT ?`
-    )
-    .all(chatId, limit) as Array<{
-    chat_id: number;
-    strategy_name: string;
-    symbol: string;
-    direction: string;
-    entry_price: number;
-    exit_price: number;
-    stop_loss: number | null;
-    target_profit: number | null;
-    pnl_usdt: number;
-    was_profitable: number;
-    created_at: number;
-  }>;
+): Promise<PerformanceRecord[]> {
+  const { data, error } = await supabase
+    .from('performance_log')
+    .select('*')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
 
-  return rows.map((row) => ({
+  if (error || !data) return [];
+
+  return data.map((row) => ({
     chatId: row.chat_id,
     strategyName: row.strategy_name,
     symbol: row.symbol,

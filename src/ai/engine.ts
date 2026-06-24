@@ -58,11 +58,11 @@ function findDynamicSLTP(
   return { stopLoss, targetProfit };
 }
 
-function getLearnedAdjustments(
+async function getLearnedAdjustments(
   strategyName: string,
   symbol: string
-): { slMultiplier: number; tpMultiplier: number; levAdjust: number } {
-  const stats = getStrategyStats(strategyName, symbol);
+): Promise<{ slMultiplier: number; tpMultiplier: number; levAdjust: number }> {
+  const stats = await getStrategyStats(strategyName, symbol);
   const { recent, penalty } = stats;
 
   if (recent.length === 0) {
@@ -99,7 +99,7 @@ function getLearnedAdjustments(
   };
 }
 
-function scoreCandidate(
+async function scoreCandidate(
   symbol: string,
   rsi1h: number,
   rsi15m: number,
@@ -109,7 +109,7 @@ function scoreCandidate(
   lows: number[],
   highs: number[],
   atr: number,
-): ScoredCandidate | null {
+): Promise<ScoredCandidate | null> {
   let score = 0;
   let direction: TradeDirection = 'LONG';
   let strategyName = STRATEGY_DIP;
@@ -151,14 +151,14 @@ function scoreCandidate(
   score += Math.min(adx, 50) * 0.3;
   score += Math.abs(rsi1h - 50) * 0.4;
 
-  const penalty = getPenaltyMultiplier(strategyName, symbol);
+  const penalty = await getPenaltyMultiplier(strategyName, symbol);
   score *= penalty;
 
   if (penalty < 1) {
     reasons.push(`penalty x${penalty.toFixed(2)}`);
   }
 
-  const learning = getLearnedAdjustments(strategyName, symbol);
+  const learning = await getLearnedAdjustments(strategyName, symbol);
 
   const { stopLoss, targetProfit } = findDynamicSLTP(
     highs, lows, atr, direction, entryPrice
@@ -244,7 +244,7 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
       const lows = klines1h.map((k) => parseFloat(k[3]));
       const closes = klines1h.map((k) => parseFloat(k[4]));
 
-      let candidate = scoreCandidate(
+      let candidate = await scoreCandidate(
         symbol,
         ind1h.rsi,
         ind15mRsi,

@@ -9,7 +9,7 @@ export function registerStartHandler(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const user = getOrCreateUser(chatId, config.defaultBalance);
+    const user = await getOrCreateUser(chatId, config.defaultBalance);
     const text = buildWelcomeText(user.address);
 
     await ctx.reply(text, {

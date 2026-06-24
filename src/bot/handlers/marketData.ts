@@ -11,7 +11,7 @@ export function registerMarketDataHandler(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const records = getUserPerformance(chatId, 500);
+    const records = await getUserPerformance(chatId, 500);
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mktdata-'));
     const filePath = path.join(tmpDir, 'market_data.txt');
 

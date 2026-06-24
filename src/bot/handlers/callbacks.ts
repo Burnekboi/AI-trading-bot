@@ -47,13 +47,13 @@ async function processTradeAmount(
   chatId: number,
   amount: number
 ): Promise<void> {
-  const user = getUser(chatId);
+  const user = await getUser(chatId);
   if (!user) {
     await ctx.reply('Please send /start to initialize your account.');
     return;
   }
 
-  const positions = getUserPositions(chatId);
+  const positions = await getUserPositions(chatId);
   const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
   const available = user.usdtBalance - allocated;
 
@@ -68,8 +68,8 @@ async function processTradeAmount(
   const maxPairsWithFee = Math.max(1, maxPairs - 1);
 
   const tradeMode = getTradeMode(chatId);
-  updateUserLastTrade(chatId, amount, tradeMode ?? 'market');
-  setUserStep(chatId, null);
+  await updateUserLastTrade(chatId, amount, tradeMode ?? 'market');
+  await setUserStep(chatId, null);
 
   await deletePromptMessages(ctx, chatId);
 
@@ -89,7 +89,7 @@ async function processTradeAmount(
           ...positionKeyboard(trade.symbol),
         });
         trade.messageId = cardMsg.message_id;
-        savePosition(trade);
+        await savePosition(trade);
       }
 
       clearSession(chatId);
@@ -105,7 +105,7 @@ async function processTradeAmount(
       `How many pairs do you want to execute?`,
       { parse_mode: 'HTML' }
     );
-    setUserStep(chatId, 'awaiting_pair_count');
+    await setUserStep(chatId, 'awaiting_pair_count');
   }
 }
 
@@ -114,7 +114,7 @@ async function processPairCount(
   chatId: number,
   text: string
 ): Promise<void> {
-  const user = getUser(chatId);
+  const user = await getUser(chatId);
   if (!user) return;
 
   const count = parseInt(text, 10);
@@ -125,12 +125,12 @@ async function processPairCount(
 
   if (!user.lastTradeAmount) {
     await ctx.reply('Session expired. Please start a new trade.');
-    setUserStep(chatId, null);
+    await setUserStep(chatId, null);
     return;
   }
 
   const amount = user.lastTradeAmount;
-  const positions = getUserPositions(chatId);
+  const positions = await getUserPositions(chatId);
   const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
   const available = user.usdtBalance - allocated;
   const maxPairs = Math.max(1, Math.floor(available / amount) - 1);
@@ -150,7 +150,7 @@ async function processPairCount(
     return;
   }
 
-  setUserStep(chatId, null);
+  await setUserStep(chatId, null);
 
   const scanningMsg = await ctx.reply(AI_SCANNING_TEXT);
   addPromptMessage(chatId, scanningMsg.message_id);
@@ -169,7 +169,7 @@ async function processPairCount(
         ...positionKeyboard(trade.symbol),
       });
       trade.messageId = cardMsg.message_id;
-      savePosition(trade);
+      await savePosition(trade);
     }
 
     clearSession(chatId);
@@ -189,7 +189,7 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
     const text = ctx.message.text.trim();
     if (text.startsWith('/')) return;
 
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user?.currentStep) return;
 
     const userMessageId = ctx.message.message_id;
@@ -205,7 +205,7 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           return;
         }
         setLimitDuration(chatId, durationMs);
-        setUserStep(chatId, 'awaiting_limit_amount');
+        await setUserStep(chatId, 'awaiting_limit_amount');
         const msg = await ctx.reply(PROMPT_LIMIT_AMOUNT, backKeyboard());
         addPromptMessage(chatId, msg.message_id);
         break;
@@ -252,8 +252,8 @@ export function registerStopTradingHandler(bot: Telegraf<Context>): void {
         await ctx.reply(text, { parse_mode: 'HTML' });
       }
 
-      const remaining = getUserPositions(chatId).length;
-      const user = getUser(chatId);
+      const remaining = (await getUserPositions(chatId)).length;
+      const user = await getUser(chatId);
       if (user) {
         const dashboard = buildDashboardText(
           user.address,
@@ -283,7 +283,7 @@ export function registerStopAllHandler(bot: Telegraf<Context>): void {
       const results = await closeAllPositions(chatId, 'Stopped');
 
       const totalPnl = results.reduce((s, r) => s + r.result.pnlUsdt, 0);
-      const user = getUser(chatId);
+      const user = await getUser(chatId);
 
       if (ctx.callbackQuery?.message && user) {
         const dashboard = buildDashboardText(
@@ -318,8 +318,8 @@ export function registerStopLastHandler(bot: Telegraf<Context>): void {
 
     try {
       const { position, result } = await closePosition(chatId, 'Stopped');
-      const remaining = getUserPositions(chatId).length;
-      const user = getUser(chatId);
+      const remaining = (await getUserPositions(chatId)).length;
+      const user = await getUser(chatId);
 
       if (ctx.callbackQuery?.message && user) {
         const dashboard = buildDashboardText(
@@ -352,16 +352,17 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user) {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
 
     clearSession(chatId);
-    setUserStep(chatId, null);
+    await setUserStep(chatId, null);
 
-    const hasPositions = getUserPositions(chatId).length > 0;
+    const positions = await getUserPositions(chatId);
+    const hasPositions = positions.length > 0;
     const text = buildDashboardText(
       user.address,
       user.usdtBalance,
@@ -381,10 +382,10 @@ export function registerStatsHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const user = getUser(chatId);
+    const user = await getUser(chatId);
     if (!user) return;
 
-    const records = getUserPerformance(chatId);
+    const records = await getUserPerformance(chatId);
     const wins = records.filter((r) => r.wasProfitable).length;
     const losses = records.filter((r) => !r.wasProfitable).length;
 
@@ -408,7 +409,7 @@ export function registerStatsHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const records = getUserPerformance(chatId, 20);
+    const records = await getUserPerformance(chatId, 20);
 
     let text: string;
 

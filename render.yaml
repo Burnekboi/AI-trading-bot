@@ -10,8 +10,10 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: DATABASE_PATH
-        value: /var/data/simulator.db
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       - key: MEXC_API_BASE
         value: https://api.mexc.com/api/v3
       - key: LEVERAGE
@@ -24,7 +26,3 @@ services:
         value: "30"
       - key: MIN_QUOTE_VOLUME
         value: "500000"
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1

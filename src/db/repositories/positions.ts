@@ -1,4 +1,4 @@
-import { getDatabase } from '../database';
+import { supabase } from '../database';
 import type { ActivePosition, TradeDirection } from '../../types';
 
 function rowToPosition(row: {
@@ -31,92 +31,106 @@ function rowToPosition(row: {
   };
 }
 
-const SELECT_COLS = `id, chat_id, message_id, symbol, direction, allocated_amount,
-  entry_price, stop_loss, target_profit, leverage, strategy_name, timer_expires_at`;
+export async function getPosition(positionId: number): Promise<ActivePosition | null> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('*')
+    .eq('id', positionId)
+    .maybeSingle();
 
-export function getPosition(positionId: number): ActivePosition | null {
-  const row = getDatabase()
-    .prepare(`SELECT ${SELECT_COLS} FROM active_positions WHERE id = ?`)
-    .get(positionId) as Record<string, unknown> | undefined;
-
-  return row ? rowToPosition(row as Parameters<typeof rowToPosition>[0]) : null;
+  if (error || !data) return null;
+  return rowToPosition(data as Parameters<typeof rowToPosition>[0]);
 }
 
-export function getPositionByMessage(chatId: number, messageId: number): ActivePosition | null {
-  const row = getDatabase()
-    .prepare(`SELECT ${SELECT_COLS} FROM active_positions WHERE chat_id = ? AND message_id = ?`)
-    .get(chatId, messageId) as Record<string, unknown> | undefined;
+export async function getPositionByMessage(chatId: number, messageId: number): Promise<ActivePosition | null> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('*')
+    .eq('chat_id', chatId)
+    .eq('message_id', messageId)
+    .maybeSingle();
 
-  return row ? rowToPosition(row as Parameters<typeof rowToPosition>[0]) : null;
+  if (error || !data) return null;
+  return rowToPosition(data as Parameters<typeof rowToPosition>[0]);
 }
 
-export function getUserPositions(chatId: number): ActivePosition[] {
-  const rows = getDatabase()
-    .prepare(`SELECT ${SELECT_COLS} FROM active_positions WHERE chat_id = ?`)
-    .all(chatId) as Array<Record<string, unknown>>;
+export async function getUserPositions(chatId: number): Promise<ActivePosition[]> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('*')
+    .eq('chat_id', chatId);
 
-  return rows.map((r) => rowToPosition(r as Parameters<typeof rowToPosition>[0]));
+  if (error || !data) return [];
+  return (data as Array<Parameters<typeof rowToPosition>[0]>).map(rowToPosition);
 }
 
-export function getAllActivePositions(): ActivePosition[] {
-  const rows = getDatabase()
-    .prepare(`SELECT ${SELECT_COLS} FROM active_positions`)
-    .all() as Array<Record<string, unknown>>;
+export async function getAllActivePositions(): Promise<ActivePosition[]> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('*');
 
-  return rows.map((r) => rowToPosition(r as Parameters<typeof rowToPosition>[0]));
+  if (error || !data) return [];
+  return (data as Array<Parameters<typeof rowToPosition>[0]>).map(rowToPosition);
 }
 
-export function createPosition(position: ActivePosition): number {
-  const result = getDatabase()
-    .prepare(
-      `INSERT INTO active_positions
-       (chat_id, message_id, symbol, direction, allocated_amount,
-        entry_price, stop_loss, target_profit, leverage, strategy_name, timer_expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      position.chatId,
-      position.messageId,
-      position.symbol,
-      position.direction,
-      position.allocatedAmount,
-      position.entryPrice,
-      position.stopLoss,
-      position.targetProfit,
-      position.leverage,
-      position.strategyName,
-      position.timerExpiresAt
-    );
+export async function createPosition(position: ActivePosition): Promise<number> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .insert({
+      chat_id: position.chatId,
+      message_id: position.messageId,
+      symbol: position.symbol,
+      direction: position.direction,
+      allocated_amount: position.allocatedAmount,
+      entry_price: position.entryPrice,
+      stop_loss: position.stopLoss,
+      target_profit: position.targetProfit,
+      leverage: position.leverage,
+      strategy_name: position.strategyName,
+      timer_expires_at: position.timerExpiresAt,
+    })
+    .select('id')
+    .single();
 
-  const id = Number(result.lastInsertRowid);
-  position.id = id;
-  return id;
+  if (error) throw error;
+  position.id = data.id;
+  return data.id;
 }
 
-export function updatePositionMessageId(positionId: number, messageId: number): void {
-  getDatabase()
-    .prepare(`UPDATE active_positions SET message_id = ? WHERE id = ?`)
-    .run(messageId, positionId);
+export async function updatePositionMessageId(positionId: number, messageId: number): Promise<void> {
+  const { error } = await supabase
+    .from('active_positions')
+    .update({ message_id: messageId })
+    .eq('id', positionId);
+
+  if (error) throw error;
 }
 
-export function deletePosition(positionId: number): void {
-  getDatabase()
-    .prepare(`DELETE FROM active_positions WHERE id = ?`)
-    .run(positionId);
+export async function deletePosition(positionId: number): Promise<void> {
+  const { error } = await supabase
+    .from('active_positions')
+    .delete()
+    .eq('id', positionId);
+
+  if (error) throw error;
 }
 
-export function getUserAllocatedTotal(chatId: number): number {
-  const row = getDatabase()
-    .prepare(`SELECT COALESCE(SUM(allocated_amount), 0) AS total FROM active_positions WHERE chat_id = ?`)
-    .get(chatId) as { total: number };
+export async function getUserAllocatedTotal(chatId: number): Promise<number> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('allocated_amount')
+    .eq('chat_id', chatId);
 
-  return row.total;
+  if (error || !data) return 0;
+  return data.reduce((sum, row) => sum + (row.allocated_amount ?? 0), 0);
 }
 
-export function hasActivePosition(chatId: number): boolean {
-  const row = getDatabase()
-    .prepare(`SELECT 1 FROM active_positions WHERE chat_id = ? LIMIT 1`)
-    .get(chatId);
+export async function hasActivePosition(chatId: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('active_positions')
+    .select('id', { count: 'exact', head: true })
+    .eq('chat_id', chatId);
 
-  return !!row;
+  if (error || !data) return false;
+  return data.length > 0;
 }

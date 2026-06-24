@@ -71,13 +71,13 @@ export async function executeMultipleTrades(
   amountPerPair: number,
   count: number
 ): Promise<ActivePosition[]> {
-  const user = getUser(chatId);
+  const user = await getUser(chatId);
   if (!user) {
     throw new Error('User not found. Send /start first.');
   }
 
   const totalNeeded = amountPerPair * count;
-  const allocated = getUserAllocatedTotal(chatId);
+  const allocated = await getUserAllocatedTotal(chatId);
   const available = user.usdtBalance - allocated;
 
   if (totalNeeded > available) {
@@ -107,7 +107,7 @@ export async function executeMultipleTrades(
 export async function autoStartTrade(
   chatId: number
 ): Promise<ActivePosition | null> {
-  const user = getUser(chatId);
+  const user = await getUser(chatId);
   if (!user?.lastTradeAmount) return null;
 
   const amount = Math.min(user.lastTradeAmount, user.usdtBalance);
@@ -117,12 +117,12 @@ export async function autoStartTrade(
   return positions[0] ?? null;
 }
 
-export function savePosition(position: ActivePosition): void {
-  createPosition(position);
+export async function savePosition(position: ActivePosition): Promise<void> {
+  await createPosition(position);
 }
 
-export function setPositionMessageId(positionId: number, messageId: number): void {
-  updatePositionMessageId(positionId, messageId);
+export async function setPositionMessageId(positionId: number, messageId: number): Promise<void> {
+  await updatePositionMessageId(positionId, messageId);
 }
 
 export async function closePosition(
@@ -130,7 +130,7 @@ export async function closePosition(
   status: 'Ended..' | 'Stopped',
   overrideExitPrice?: number
 ): Promise<{ position: ActivePosition; result: ClosePositionResult }> {
-  const positions = getUserPositions(chatId);
+  const positions = await getUserPositions(chatId);
   if (positions.length === 0) {
     throw new Error('No active position found.');
   }
@@ -145,7 +145,7 @@ export async function closePositionByMessage(
   status: 'Ended..' | 'Stopped',
   overrideExitPrice?: number
 ): Promise<{ position: ActivePosition; result: ClosePositionResult }> {
-  const position = getPositionByMessage(chatId, messageId);
+  const position = await getPositionByMessage(chatId, messageId);
   if (!position) {
     throw new Error('No active position found.');
   }
@@ -157,7 +157,7 @@ export async function closeAllPositions(
   chatId: number,
   status: 'Ended..' | 'Stopped'
 ): Promise<Array<{ position: ActivePosition; result: ClosePositionResult }>> {
-  const positions = getUserPositions(chatId);
+  const positions = await getUserPositions(chatId);
   if (positions.length === 0) {
     throw new Error('No active positions found.');
   }
@@ -176,12 +176,12 @@ async function closePositionById(
   status: 'Ended..' | 'Stopped',
   overrideExitPrice?: number
 ): Promise<{ position: ActivePosition; result: ClosePositionResult }> {
-  const position = getPosition(positionId);
+  const position = await getPosition(positionId);
   if (!position) {
     throw new Error('No active position found.');
   }
 
-  const user = getUser(chatId);
+  const user = await getUser(chatId);
   if (!user) {
     throw new Error('User not found.');
   }
@@ -198,9 +198,9 @@ async function closePositionById(
   );
 
   const newBalance = Math.max(0, user.usdtBalance + pnlUsdt);
-  updateUserBalance(chatId, newBalance);
+  await updateUserBalance(chatId, newBalance);
 
-  recordTradeOutcome({
+  await recordTradeOutcome({
     chatId,
     strategyName: position.strategyName,
     symbol: position.symbol,
@@ -213,7 +213,7 @@ async function closePositionById(
     wasProfitable: pnlUsdt > 0,
   });
 
-  deletePosition(positionId);
+  await deletePosition(positionId);
 
   return {
     position,

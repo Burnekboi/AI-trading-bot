@@ -17,14 +17,14 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    if (!getUser(chatId)) {
+    if (!(await getUser(chatId))) {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
 
     clearSession(chatId);
     setTradeMode(chatId, 'market');
-    setUserStep(chatId, 'awaiting_trade_amount');
+    await setUserStep(chatId, 'awaiting_trade_amount');
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(PROMPT_TRADE_AMOUNT, {
@@ -43,14 +43,14 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    if (!getUser(chatId)) {
+    if (!(await getUser(chatId))) {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
 
     clearSession(chatId);
     setTradeMode(chatId, 'limit');
-    setUserStep(chatId, 'awaiting_limit_duration');
+    await setUserStep(chatId, 'awaiting_limit_duration');
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(PROMPT_LIMIT_DURATION, {
