@@ -64,7 +64,8 @@ async function main(): Promise<void> {
     process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
     if (process.env.RENDER_EXTERNAL_URL) {
-      const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
+      const base = process.env.RENDER_EXTERNAL_URL.replace(/\/+$/, '');
+      const webhookUrl = `${base}${WEBHOOK_PATH}`;
       await bot.telegram.setWebhook(webhookUrl);
       const info = await bot.telegram.getWebhookInfo();
       console.log('Webhook registered:', info.url, '| pending:', info.pending_update_count, '| last error:', info.last_error_message ?? 'none');
