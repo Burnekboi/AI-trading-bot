@@ -28,8 +28,16 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (req.url === WEBHOOK_PATH && req.method === 'POST' && webhookHandler) {
-      webhookHandler(req, res);
+    if (req.url === WEBHOOK_PATH && req.method === 'POST') {
+      if (webhookHandler) {
+        console.log('Webhook update received');
+        webhookHandler(req, res).catch((err) =>
+          console.error('Webhook handler error:', err)
+        );
+      } else {
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true }));
+      }
       return;
     }
 
@@ -56,10 +64,10 @@ async function main(): Promise<void> {
     process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
     if (process.env.RENDER_EXTERNAL_URL) {
-      await bot.telegram.setWebhook(
-        `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`
-      );
-      console.log('Webhook registered');
+      const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}${WEBHOOK_PATH}`;
+      await bot.telegram.setWebhook(webhookUrl);
+      const info = await bot.telegram.getWebhookInfo();
+      console.log('Webhook registered:', info.url, '| pending:', info.pending_update_count, '| last error:', info.last_error_message ?? 'none');
     } else {
       await bot.launch();
     }
