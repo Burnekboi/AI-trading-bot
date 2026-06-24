@@ -13,6 +13,9 @@ async function main(): Promise<void> {
   const bot = createBot(config.botToken);
 
   const server = http.createServer((req, res) => {
+    const logReq = () => console.log(`[${req.method}] ${req.url}`);
+    logReq();
+
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(botStatus === 'running' ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: botStatus, uptime: process.uptime() }));
@@ -21,10 +24,13 @@ async function main(): Promise<void> {
 
     if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
       let body = '';
-      req.on('data', (chunk) => body += chunk);
+      req.on('data', (chunk: string) => body += chunk);
       req.on('end', async () => {
         try {
           const update = JSON.parse(body);
+          if (update?.update_id) {
+            console.log('Webhook update received, update_id:', update.update_id, 'message?' in update ? 'has message' : 'has callback_query');
+          }
           await bot.handleUpdate(update, res);
         } catch (err) {
           console.error('Webhook error:', err);

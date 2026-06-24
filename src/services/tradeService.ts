@@ -208,25 +208,29 @@ async function closePositionById(
     position.leverage
   );
 
-  const newBalance = Math.max(0, user.usdtBalance + pnlUsdt);
-  await updateUserBalance(chatId, newBalance);
-
-  await recordTradeOutcome({
-    chatId,
-    strategyName: position.strategyName,
-    symbol: position.symbol,
-    direction: position.direction,
-    entryPrice: position.entryPrice,
-    exitPrice,
-    stopLoss: position.stopLoss,
-    targetProfit: position.targetProfit,
-    allocatedAmount: position.allocatedAmount,
-    closingStatus: status === 'Ended..' ? 'Ended' : 'Cancelled',
-    pnlUsdt,
-    wasProfitable: pnlUsdt > 0,
-  });
+  try {
+    await recordTradeOutcome({
+      chatId,
+      strategyName: position.strategyName,
+      symbol: position.symbol,
+      direction: position.direction,
+      entryPrice: position.entryPrice,
+      exitPrice,
+      stopLoss: position.stopLoss,
+      targetProfit: position.targetProfit,
+      allocatedAmount: position.allocatedAmount,
+      closingStatus: status === 'Ended..' ? 'Ended' : 'Cancelled',
+      pnlUsdt,
+      wasProfitable: pnlUsdt > 0,
+    });
+  } catch (err) {
+    console.error('recordTradeOutcome failed (non-fatal, closing anyway):', err);
+  }
 
   await deletePosition(positionId);
+
+  const newBalance = Math.max(0, user.usdtBalance + pnlUsdt);
+  await updateUserBalance(chatId, newBalance);
 
   return {
     position,
