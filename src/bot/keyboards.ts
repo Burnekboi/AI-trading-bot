@@ -57,6 +57,9 @@ export const positionKeyboard = (symbol: string) =>
     Markup.button.callback('🛑 STOP ALL', 'stop_all'),
   ],
   [
+    Markup.button.callback('📊 ACTIVITY', 'open_activity'),
+  ],
+  [
     Markup.button.url('📈 LIVE MARKET', `https://www.tradingview.com/chart/?symbol=${symbol}`),
   ],
 ]);
