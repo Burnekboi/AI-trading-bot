@@ -11,37 +11,30 @@ let botStatus: 'starting' | 'running' | 'error' = 'starting';
 
 async function main(): Promise<void> {
   const bot = createBot(config.botToken);
-  const webhookHandler = process.env.RENDER_EXTERNAL_URL
-    ? bot.webhookCallback(WEBHOOK_PATH)
-    : null;
 
   const server = http.createServer((req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-
     if (req.url === '/health' && req.method === 'GET') {
-      const healthy = botStatus === 'running';
-      res.writeHead(healthy ? 200 : 503);
-      res.end(JSON.stringify({
-        status: healthy ? 'ok' : botStatus,
-        uptime: process.uptime(),
-      }));
+      res.writeHead(botStatus === 'running' ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: botStatus, uptime: process.uptime() }));
       return;
     }
 
-    if (req.url === WEBHOOK_PATH && req.method === 'POST') {
-      if (webhookHandler) {
-        console.log('Webhook update received');
-        webhookHandler(req, res).catch((err) =>
-          console.error('Webhook handler error:', err)
-        );
-      } else {
-        res.writeHead(200);
-        res.end(JSON.stringify({ ok: true }));
-      }
+    if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
+      let body = '';
+      req.on('data', (chunk) => body += chunk);
+      req.on('end', async () => {
+        try {
+          const update = JSON.parse(body);
+          await bot.handleUpdate(update, res);
+        } catch (err) {
+          console.error('Webhook error:', err);
+          if (!res.writableEnded) res.end();
+        }
+      });
       return;
     }
 
-    res.writeHead(404);
+    res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'not found' }));
   });
 
