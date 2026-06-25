@@ -2,6 +2,7 @@ import { supabase } from '../database';
 import type { PerformanceRecord } from '../../types';
 
 export async function logPerformance(record: PerformanceRecord): Promise<void> {
+  const now = Date.now();
   const { error } = await supabase.from('performance_log').insert({
     chat_id: record.chatId,
     strategy_name: record.strategyName,
@@ -15,9 +16,13 @@ export async function logPerformance(record: PerformanceRecord): Promise<void> {
     closing_status: record.closingStatus,
     pnl_usdt: record.pnlUsdt,
     was_profitable: record.wasProfitable ? 1 : 0,
+    created_at: now,
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error('logPerformance error:', JSON.stringify(error));
+    throw error;
+  }
 }
 
 export async function getRecentPerformance(

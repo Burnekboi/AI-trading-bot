@@ -95,7 +95,7 @@ export function buildActivityText(
   return (
     `<b>📊 ACTIVITY</b>\n\n` +
     `<pre>Open(Active)          Closed(Ended,Cancelled)\n` +
-    `${String(openCount).padEnd(23)}${closedCount}</pre>`
+    `${String(openCount).padEnd(22)}${closedCount}</pre>`
   );
 }
 
@@ -119,7 +119,7 @@ export function buildActivityListText(
     const margin = `${p.allocatedAmount.toFixed(0)}USDT`;
     const status = 'Active';
     lines.push(
-      `${pair.padEnd(15)}${margin.padEnd(8)}${p.direction.padEnd(7)}${status.padEnd(11)}n/a`
+      `${pair.padEnd(15)}${margin.padEnd(8)}${p.direction.padEnd(7)}${status.padEnd(12)}n/a`
     );
   }
 
@@ -130,7 +130,7 @@ export function buildActivityListText(
     const sign = r.pnlUsdt >= 0 ? '+' : '';
     const pnl = `${sign}${r.pnlUsdt.toFixed(2)}USDT`;
     lines.push(
-      `${pair.padEnd(15)}${margin.padEnd(8)}${r.direction.padEnd(7)}${status.padEnd(11)}${pnl}`
+      `${pair.padEnd(15)}${margin.padEnd(8)}${r.direction.padEnd(7)}${status.padEnd(12)}${pnl}`
     );
   }
 
