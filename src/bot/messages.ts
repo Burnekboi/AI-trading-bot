@@ -94,8 +94,8 @@ export function buildActivityText(
 ): string {
   return (
     `<b>📊 ACTIVITY</b>\n\n` +
-    `<pre>Open(Active)          Closed(Ended,Cancelled)\n` +
-    `${String(openCount).padEnd(22)}${closedCount}</pre>`
+    `🟢 <b>OPEN:</b>   ${openCount}\n` +
+    `🔴 <b>CLOSED:</b> ${closedCount}`
   );
 }
 
