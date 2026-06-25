@@ -58,10 +58,26 @@ export function buildClosedPositionText(
 ): string {
   const emoji = directionEmoji(position.direction);
   const pair = formatSymbolDisplay(position.symbol);
-  const tp = position.targetProfit
-    ? formatPrice(position.targetProfit)
-    : 'None';
-  const statusEmoji = result.status === 'Stopped' ? '🛑' : '⏰';
+  const isWin = result.pnlUsdt >= 0;
+
+  let statusEmoji: string;
+  let statusText: string;
+  if (result.status === 'Stopped') {
+    statusEmoji = '🛑';
+    statusText = 'STOPPED';
+  } else if (isWin) {
+    statusEmoji = '🟢';
+    statusText = 'TARGET HIT';
+  } else {
+    statusEmoji = '🔴';
+    statusText = 'STOP LOSS HIT';
+  }
+
+  const slOrTpLine = isWin && position.targetProfit
+    ? `🎯 Target profit: ${formatPrice(position.targetProfit)}`
+    : !isWin && position.stopLoss
+      ? `🔴 Stop loss: ${formatPrice(position.stopLoss)}`
+      : '';
 
   return (
     `${emoji} <b>${position.direction}</b>\n` +
@@ -69,8 +85,8 @@ export function buildClosedPositionText(
     `💰 ${formatBalance(position.allocatedAmount)} USDT\n` +
     `⚡ Leverage: ${position.leverage}x\n` +
     `🔵 Entry: ${formatPrice(position.entryPrice)}\n` +
-    `🟢 Target profit: ${tp}\n` +
-    `${statusEmoji} STATUS: ${result.status.toUpperCase()}\n` +
+    (slOrTpLine ? `${slOrTpLine}\n` : '') +
+    `${statusEmoji} STATUS: ${statusText}\n` +
     `💵 ${formatPnl(result.pnlUsdt)} (PnL)\n` +
     `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`
   );
