@@ -1,5 +1,6 @@
 import { Context, Telegraf } from 'telegraf';
 import { getUser, setUserStep } from '../../db/repositories/users';
+import { getUserPositions } from '../../db/repositories/positions';
 import {
   addPromptMessage,
   clearSession,
@@ -7,7 +8,7 @@ import {
 } from '../session';
 import {
   PROMPT_LIMIT_DURATION,
-  PROMPT_TRADE_AMOUNT,
+  promptTradeAmount,
 } from '../messages';
 import { backKeyboard } from '../keyboards';
 
@@ -17,23 +18,33 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    if (!(await getUser(chatId))) {
+    const user = await getUser(chatId);
+    if (!user) {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
+
+    const positions = await getUserPositions(chatId);
+    const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
+    const available = user.usdtBalance - allocated;
 
     clearSession(chatId);
     setTradeMode(chatId, 'market');
     await setUserStep(chatId, 'awaiting_trade_amount');
 
+    const text = promptTradeAmount(available);
+
     if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(PROMPT_TRADE_AMOUNT, {
+      await ctx.editMessageText(text, {
         parse_mode: 'HTML',
         ...backKeyboard(),
       });
       addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
     } else {
-      const msg = await ctx.reply(PROMPT_TRADE_AMOUNT, backKeyboard());
+      const msg = await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
       addPromptMessage(chatId, msg.message_id);
     }
   });

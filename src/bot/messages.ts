@@ -79,8 +79,12 @@ export function buildClosedPositionText(
 export const AI_SCANNING_TEXT =
   '🔍 AI Engine active. Scanning MEXC volume leaders and calculating trade strategies...';
 
-export const PROMPT_TRADE_AMOUNT =
-  '💰 Enter the virtual USDT amount you wish to allocate (e.g., 20):';
+export function promptTradeAmount(available: number): string {
+  return (
+    `💰 Enter the virtual USDT amount you wish to allocate.\n` +
+    `💳 Available balance: <b>${available.toFixed(2)} USDT</b>`
+  );
+}
 
 export const PROMPT_LIMIT_DURATION =
   '⏳ Enter a duration constraint (e.g., 1hr, 4hr, or 24hr):';
