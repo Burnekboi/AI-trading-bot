@@ -43,6 +43,16 @@ export function isStopLossHit(
   return currentPrice >= stopLoss;
 }
 
+export function isTakeProfitHit(
+  direction: TradeDirection,
+  currentPrice: number,
+  targetProfit: number | null
+): boolean {
+  if (targetProfit === null) return false;
+  if (direction === 'LONG') return currentPrice >= targetProfit;
+  return currentPrice <= targetProfit;
+}
+
 export async function executeTrade(
   chatId: number,
   allocatedAmount: number,

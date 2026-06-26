@@ -5,6 +5,7 @@ import { getCurrentPrice } from '../mexc/client';
 import {
   closePositionByMessage,
   isStopLossHit,
+  isTakeProfitHit,
   autoStartTrade,
   savePosition,
 } from './tradeService';
@@ -36,7 +37,13 @@ export function startPositionMonitor(bot: Telegraf): void {
           position.stopLoss
         );
 
-        if (!timerExpired && !slHit) continue;
+        const tpHit = isTakeProfitHit(
+          position.direction,
+          currentPrice,
+          position.targetProfit
+        );
+
+        if (!timerExpired && !slHit && !tpHit) continue;
 
         const { result } = await closePositionByMessage(
           position.chatId,
