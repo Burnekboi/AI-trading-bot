@@ -59,6 +59,11 @@ async function processTradeAmount(
   const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
   const available = user.usdtBalance - allocated;
 
+  if (amount < 10) {
+    await ctx.reply('Minimum trade amount is 10 USDT. Try again:');
+    return;
+  }
+
   if (amount > available) {
     await ctx.reply(
       `Insufficient balance. You have ${available.toFixed(2)} USDT available. Try again:`

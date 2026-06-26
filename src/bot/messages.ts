@@ -98,6 +98,7 @@ export const AI_SCANNING_TEXT =
 export function promptTradeAmount(available: number): string {
   return (
     `💰 Enter the virtual USDT amount you wish to allocate.\n` +
+    `⚠️ Minimum: <b>10 USDT</b>\n` +
     `💳 Available balance: <b>${available.toFixed(2)} USDT</b>`
   );
 }
