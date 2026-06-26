@@ -39,22 +39,38 @@ function findDynamicSLTP(
   const swingHigh = Math.max(...recentHighs);
   const swingLow = Math.min(...recentLows);
 
+  // Minimum distance from entry to prevent sub-tick / premature closes
+  const minBuffer = Math.max(entryPrice * 0.003, atr * 0.5);
+
   if (direction === 'LONG') {
+    // SL candidates (both should be below entry)
     const slFromSwing = swingLow - atr * 0.5;
     const slFromAtr = entryPrice - atr * 1.5;
-    const stopLoss = Math.max(slFromSwing, slFromAtr);
+    // Pick the tighter stop (closer to entry), but never above entry - minBuffer
+    const stopLoss = Math.min(Math.max(slFromSwing, slFromAtr), entryPrice - minBuffer);
+
+    // TP candidates (both should be above entry)
     const tpFromSwing = swingHigh + atr * 0.5;
     const tpFromAtr = entryPrice + atr * 3;
-    const targetProfit = Math.min(tpFromSwing, tpFromAtr);
+    // Pick the tighter TP (closer to entry), but never below entry + minBuffer * 2
+    const targetProfit = Math.max(Math.min(tpFromSwing, tpFromAtr), entryPrice + minBuffer * 2);
+
     return { stopLoss, targetProfit };
   }
 
+  // SHORT
+  // SL candidates (both should be above entry)
   const slFromSwing = swingHigh + atr * 0.5;
   const slFromAtr = entryPrice + atr * 1.5;
-  const stopLoss = Math.min(slFromSwing, slFromAtr);
+  // Pick the tighter stop (closer to entry), but never below entry + minBuffer
+  const stopLoss = Math.max(Math.min(slFromSwing, slFromAtr), entryPrice + minBuffer);
+
+  // TP candidates (both should be below entry)
   const tpFromSwing = swingLow - atr * 0.5;
   const tpFromAtr = entryPrice - atr * 3;
-  const targetProfit = Math.max(tpFromSwing, tpFromAtr);
+  // Pick the tighter TP (closer to entry), but never above entry - minBuffer * 2
+  const targetProfit = Math.min(Math.max(tpFromSwing, tpFromAtr), entryPrice - minBuffer * 2);
+
   return { stopLoss, targetProfit };
 }
 
