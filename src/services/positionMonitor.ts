@@ -65,7 +65,7 @@ export function startPositionMonitor(bot: Telegraf): void {
           // Message may have been deleted
         }
 
-        if (slHit) {
+        if (slHit || tpHit) {
           const next = await autoStartTrade(position.chatId);
           if (next) {
             const cardText = buildActivePositionText(next);
