@@ -31,7 +31,9 @@ function findDynamicSLTP(
   lows: number[],
   atr: number,
   direction: TradeDirection,
-  entryPrice: number
+  entryPrice: number,
+  slMultiplier = 1,
+  tpMultiplier = 1,
 ): { stopLoss: number; targetProfit: number } {
   const lookback = 20;
   const recentHighs = highs.slice(-lookback);
@@ -39,37 +41,37 @@ function findDynamicSLTP(
   const swingHigh = Math.max(...recentHighs);
   const swingLow = Math.min(...recentLows);
 
-  // Minimum distance from entry to prevent sub-tick / premature closes
-  const minBuffer = Math.max(entryPrice * 0.003, atr * 0.5);
+  // Swing trade buffer: wider to avoid premature stop-outs
+  const minBuffer = Math.max(entryPrice * 0.005, atr * 1.0);
 
   if (direction === 'LONG') {
     // SL candidates (both should be below entry)
-    const slFromSwing = swingLow - atr * 0.5;
-    const slFromAtr = entryPrice - atr * 1.5;
-    // Pick the tighter stop (closer to entry), but never above entry - minBuffer
-    const stopLoss = Math.min(Math.max(slFromSwing, slFromAtr), entryPrice - minBuffer);
+    const slFromSwing = swingLow - atr * 1.0;
+    const slFromAtr = entryPrice - atr * 2.0;
+    // Pick the safer stop (further from entry) for swing trading
+    const stopLoss = entryPrice - (entryPrice - Math.max(Math.min(slFromSwing, slFromAtr), entryPrice - minBuffer * 3)) * slMultiplier;
 
     // TP candidates (both should be above entry)
-    const tpFromSwing = swingHigh + atr * 0.5;
-    const tpFromAtr = entryPrice + atr * 3;
-    // Pick the tighter TP (closer to entry), but never below entry + minBuffer * 2
-    const targetProfit = Math.max(Math.min(tpFromSwing, tpFromAtr), entryPrice + minBuffer * 2);
+    const tpFromSwing = swingHigh + atr * 1.0;
+    const tpFromAtr = entryPrice + atr * 5.0;
+    // Pick the tighter TP (closer to entry) for reliable profit-taking
+    const targetProfit = entryPrice + (Math.max(Math.min(tpFromSwing, tpFromAtr), entryPrice + minBuffer * 2) - entryPrice) * tpMultiplier;
 
     return { stopLoss, targetProfit };
   }
 
   // SHORT
   // SL candidates (both should be above entry)
-  const slFromSwing = swingHigh + atr * 0.5;
-  const slFromAtr = entryPrice + atr * 1.5;
-  // Pick the tighter stop (closer to entry), but never below entry + minBuffer
-  const stopLoss = Math.max(Math.min(slFromSwing, slFromAtr), entryPrice + minBuffer);
+  const slFromSwing = swingHigh + atr * 1.0;
+  const slFromAtr = entryPrice + atr * 2.0;
+  // Pick the safer stop (further from entry) for swing trading
+  const stopLoss = entryPrice + (Math.min(Math.max(slFromSwing, slFromAtr), entryPrice + minBuffer * 3) - entryPrice) * slMultiplier;
 
   // TP candidates (both should be below entry)
-  const tpFromSwing = swingLow - atr * 0.5;
-  const tpFromAtr = entryPrice - atr * 3;
-  // Pick the tighter TP (closer to entry), but never above entry - minBuffer * 2
-  const targetProfit = Math.min(Math.max(tpFromSwing, tpFromAtr), entryPrice - minBuffer * 2);
+  const tpFromSwing = swingLow - atr * 1.0;
+  const tpFromAtr = entryPrice - atr * 5.0;
+  // Pick the tighter TP (closer to entry) for reliable profit-taking
+  const targetProfit = entryPrice - (entryPrice - Math.min(Math.max(tpFromSwing, tpFromAtr), entryPrice - minBuffer * 2)) * tpMultiplier;
 
   return { stopLoss, targetProfit };
 }
@@ -125,6 +127,7 @@ async function scoreCandidate(
   lows: number[],
   highs: number[],
   atr: number,
+  closes: number[],
 ): Promise<ScoredCandidate | null> {
   let score = 0;
   let direction: TradeDirection = 'LONG';
@@ -148,6 +151,7 @@ async function scoreCandidate(
   } else if (adx > 28) {
     score += 35;
     strategyName = STRATEGY_BREAKOUT;
+    direction = getTrendDirection(highs, lows, closes);
     hasSignal = true;
     reasons.push('strong ADX trend');
   }
@@ -177,7 +181,8 @@ async function scoreCandidate(
   const learning = await getLearnedAdjustments(strategyName, symbol);
 
   const { stopLoss, targetProfit } = findDynamicSLTP(
-    highs, lows, atr, direction, entryPrice
+    highs, lows, atr, direction, entryPrice,
+    learning.slMultiplier, learning.tpMultiplier,
   );
 
   let leverage = 10;
@@ -260,7 +265,7 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
       const lows = klines1h.map((k) => parseFloat(k[3]));
       const closes = klines1h.map((k) => parseFloat(k[4]));
 
-      let candidate = await scoreCandidate(
+      const candidate = await scoreCandidate(
         symbol,
         ind1h.rsi,
         ind15mRsi,
@@ -270,16 +275,8 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
         lows,
         highs,
         ind1h.atr,
+        closes,
       );
-
-      if (!candidate) return null;
-
-      if (candidate.strategyName === STRATEGY_BREAKOUT) {
-        candidate = {
-          ...candidate,
-          direction: getTrendDirection(highs, lows, closes),
-        };
-      }
 
       return candidate;
     })
