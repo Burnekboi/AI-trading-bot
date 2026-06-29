@@ -11,6 +11,13 @@ const STRATEGY_REVERSAL = 'AI Reversal Exhaustion Strategy';
 const STRATEGY_DIP = 'AI Institutional Liquidity Dip Strategy';
 const STRATEGY_BREAKOUT = 'AI High-Velocity Breakout Strategy';
 
+const STABLECOINS = new Set([
+  'USDC', 'USDD', 'DAI', 'BUSD', 'TUSD', 'FDUSD',
+  'USDJ', 'HUSD', 'GUSD', 'PAX', 'SUSD', 'MIM',
+  'FRAX', 'LUSD', 'DOLA', 'USDP', 'USTC',
+  'EURS', 'EURT', 'EURC', 'EURI',
+]);
+
 interface ScoredCandidate {
   symbol: string;
   score: number;
@@ -253,7 +260,8 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
   const usdtPairs = allTickers
     .filter((t) => {
       const qv = parseFloat(t.quoteVolume);
-      return t.symbol.endsWith('USDT') && qv >= config.minQuoteVolume && !isNaN(qv);
+      const base = t.symbol.replace(/USDT$/, '');
+      return t.symbol.endsWith('USDT') && !STABLECOINS.has(base) && qv >= config.minQuoteVolume && !isNaN(qv);
     })
     .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
     .slice(0, config.scanTopN);
