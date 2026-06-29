@@ -25,6 +25,11 @@ const client = axios.create({
   timeout: 15_000,
 });
 
+const futuresClient = axios.create({
+  baseURL: 'https://contract.mexc.com',
+  timeout: 15_000,
+});
+
 const INTERVAL_ALIASES: Record<string, string> = {
   '1h': '60m',
   '1hour': '60m',
@@ -112,4 +117,28 @@ export async function getBatchTickers(symbols: readonly string[]): Promise<Ticke
     }
   }
   return tickers;
+}
+
+export async function getAllFuturesSymbols(): Promise<Set<string>> {
+  try {
+    const { data } = await futuresClient.get<{
+      success: boolean;
+      data: Array<{ symbol: string }>;
+    }>('/api/v1/contract/detail');
+
+    if (!data.success || !Array.isArray(data.data)) {
+      throw new Error('Unexpected futures API response');
+    }
+
+    const symbols = new Set<string>();
+    for (const contract of data.data) {
+      // Futures symbol format: "BTC_USDT" → convert to "BTCUSDT"
+      const spotFormat = contract.symbol.replace('_', '');
+      symbols.add(spotFormat);
+    }
+    return symbols;
+  } catch (error) {
+    console.error('[Futures] Failed to fetch contract list, falling back to all pairs');
+    return new Set(); // empty set = no filtering
+  }
 }

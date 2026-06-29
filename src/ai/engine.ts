@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { getAllTickers24h, getKlines } from '../mexc/client';
+import { getAllTickers24h, getKlines, getAllFuturesSymbols } from '../mexc/client';
 import {
   computeIndicatorsFull,
   getTrendDirection,
@@ -256,12 +256,13 @@ function convertCandidate(c: ScoredCandidate): TradeDecision {
 async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
   console.log('[AI Engine] Scanning all USDT pairs on MEXC...');
   const allTickers = await getAllTickers24h();
+  const futuresSymbols = await getAllFuturesSymbols();
 
   const usdtPairs = allTickers
     .filter((t) => {
       const qv = parseFloat(t.quoteVolume);
       const base = t.symbol.replace(/USDT$/, '');
-      return t.symbol.endsWith('USDT') && !STABLECOINS.has(base) && qv >= config.minQuoteVolume && !isNaN(qv);
+      return t.symbol.endsWith('USDT') && !STABLECOINS.has(base) && (futuresSymbols.size === 0 || futuresSymbols.has(t.symbol)) && qv >= config.minQuoteVolume && !isNaN(qv);
     })
     .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
     .slice(0, config.scanTopN);
