@@ -6,9 +6,12 @@ import {
   closePositionByMessage,
   isStopLossHit,
   isTakeProfitHit,
+  isPartialTpTriggered,
   autoStartTrade,
   savePosition,
 } from './tradeService';
+import { updatePositionPartialTp } from '../db/repositories/positions';
+import { getUser, updateUserBalance } from '../db/repositories/users';
 import {
   buildClosedPositionText,
   buildActivePositionText,
@@ -30,6 +33,47 @@ export function startPositionMonitor(bot: Telegraf): void {
 
         const timerExpired =
           position.timerExpiresAt !== null && now >= position.timerExpiresAt;
+
+        if (!position.partialTpHit && !timerExpired) {
+          const partialTpTriggered = isPartialTpTriggered(
+            position.direction,
+            position.entryPrice,
+            currentPrice,
+            position.leverage
+          );
+
+          if (partialTpTriggered) {
+            const user = await getUser(position.chatId);
+            if (user) {
+              const realizedPnl = position.allocatedAmount;
+              const newBalance = user.usdtBalance + realizedPnl;
+              await updateUserBalance(position.chatId, newBalance);
+
+              const newStopLoss = position.entryPrice;
+              await updatePositionPartialTp(
+                position.id!,
+                newStopLoss,
+                position.targetProfit
+              );
+              position.partialTpHit = true;
+              position.stopLoss = newStopLoss;
+
+              const text = buildActivePositionText(position);
+              try {
+                await bot.telegram.editMessageText(
+                  position.chatId,
+                  position.messageId,
+                  undefined,
+                  text,
+                  { parse_mode: 'HTML', ...positionKeyboard(position.symbol) }
+                );
+              } catch {
+                // Message may have been deleted
+              }
+            }
+            continue;
+          }
+        }
 
         const slHit = isStopLossHit(
           position.direction,

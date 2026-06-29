@@ -14,6 +14,7 @@ function rowToPosition(row: {
   leverage: number;
   strategy_name: string;
   timer_expires_at: number | null;
+  partial_tp_hit: boolean;
 }): ActivePosition {
   return {
     id: row.id,
@@ -28,6 +29,7 @@ function rowToPosition(row: {
     leverage: row.leverage,
     strategyName: row.strategy_name,
     timerExpiresAt: row.timer_expires_at,
+    partialTpHit: row.partial_tp_hit,
   };
 }
 
@@ -88,6 +90,7 @@ export async function createPosition(position: ActivePosition): Promise<number> 
       leverage: position.leverage,
       strategy_name: position.strategyName,
       timer_expires_at: position.timerExpiresAt,
+      partial_tp_hit: position.partialTpHit,
     })
     .select('id')
     .single();
@@ -101,6 +104,23 @@ export async function updatePositionMessageId(positionId: number, messageId: num
   const { error } = await supabase
     .from('active_positions')
     .update({ message_id: messageId })
+    .eq('id', positionId);
+
+  if (error) throw error;
+}
+
+export async function updatePositionPartialTp(
+  positionId: number,
+  stopLoss: number | null,
+  targetProfit: number | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('active_positions')
+    .update({
+      stop_loss: stopLoss,
+      target_profit: targetProfit,
+      partial_tp_hit: true,
+    })
     .eq('id', positionId);
 
   if (error) throw error;

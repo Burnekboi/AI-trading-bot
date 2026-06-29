@@ -32,6 +32,7 @@ export interface ActivePosition {
   leverage: number;
   strategyName: string;
   timerExpiresAt: number | null;
+  partialTpHit: boolean;
 }
 
 export interface PerformanceRecord {
@@ -63,7 +64,7 @@ export interface TradeDecision {
   direction: TradeDirection;
   strategyName: string;
   entryPrice: number;
-  stopLoss: number;
+  stopLoss: number | null;
   targetProfit: number;
   leverage: number;
   exploitabilityScore: number;

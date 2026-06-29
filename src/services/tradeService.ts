@@ -30,7 +30,21 @@ export function calculatePnl(
       ? (exitPrice - entryPrice) / entryPrice
       : (entryPrice - exitPrice) / entryPrice;
 
-  return allocatedAmount * leverage * priceChange;
+  const rawPnl = allocatedAmount * leverage * priceChange;
+  return Math.max(-allocatedAmount, rawPnl);
+}
+
+export function isPartialTpTriggered(
+  direction: TradeDirection,
+  entryPrice: number,
+  currentPrice: number,
+  leverage: number
+): boolean {
+  if (leverage <= 0) return false;
+  if (direction === 'LONG') {
+    return currentPrice >= entryPrice * (1 + 1 / leverage);
+  }
+  return currentPrice <= entryPrice * (1 - 1 / leverage);
 }
 
 export function isStopLossHit(
@@ -71,6 +85,7 @@ export async function executeTrade(
     leverage: decision.leverage,
     strategyName: decision.strategyName,
     timerExpiresAt,
+    partialTpHit: false,
   };
 
   return position;
@@ -122,6 +137,7 @@ export async function executeMultipleTrades(
     leverage: decision.leverage,
     strategyName: decision.strategyName,
     timerExpiresAt: null,
+    partialTpHit: false,
   }));
 }
 

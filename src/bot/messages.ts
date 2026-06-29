@@ -40,6 +40,10 @@ export function buildActivePositionText(position: ActivePosition): string {
     ? formatPrice(position.targetProfit)
     : 'None';
 
+  const partialTpLine = position.partialTpHit
+    ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT realized)\n`
+    : '';
+
   return (
     `${emoji} <b>${position.direction}</b>\n` +
     `📊 <b>${pair}</b> (${position.strategyName})\n` +
@@ -48,6 +52,7 @@ export function buildActivePositionText(position: ActivePosition): string {
     `🔵 Entry: ${formatPrice(position.entryPrice)}\n` +
     `🔴 Stop loss: ${sl}\n` +
     `🟢 Target profit: ${tp}\n` +
+    partialTpLine +
     `🔄 STATUS: ONGOING`
   );
 }
@@ -79,6 +84,10 @@ export function buildClosedPositionText(
       ? `🔴 Stop loss: ${formatPrice(position.stopLoss)}`
       : '';
 
+  const partialTpLine = position.partialTpHit
+    ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT realized)\n`
+    : '';
+
   return (
     `${emoji} <b>${position.direction}</b>\n` +
     `📊 <b>${pair}</b> (${position.strategyName})\n` +
@@ -86,6 +95,7 @@ export function buildClosedPositionText(
     `⚡ Leverage: ${position.leverage}x\n` +
     `🔵 Entry: ${formatPrice(position.entryPrice)}\n` +
     (slOrTpLine ? `${slOrTpLine}\n` : '') +
+    partialTpLine +
     `${statusEmoji} STATUS: ${statusText}\n` +
     `💵 ${formatPnl(result.pnlUsdt)} (PnL)\n` +
     `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`

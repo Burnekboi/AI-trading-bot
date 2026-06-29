@@ -22,7 +22,7 @@ interface ScoredCandidate {
   strategyName: string;
   leverage: number;
   scoreReason: string;
-  stopLoss: number;
+  stopLoss: number | null;
   targetProfit: number;
 }
 
@@ -180,10 +180,11 @@ async function scoreCandidate(
 
   const learning = await getLearnedAdjustments(strategyName, symbol);
 
-  const { stopLoss, targetProfit } = findDynamicSLTP(
+  const { stopLoss: rawSL, targetProfit } = findDynamicSLTP(
     highs, lows, atr, direction, entryPrice,
     learning.slMultiplier, learning.tpMultiplier,
   );
+  let stopLoss: number | null = rawSL;
 
   let leverage = 10;
   if (volatility < 1.5) leverage += 3;
@@ -196,6 +197,21 @@ async function scoreCandidate(
 
   if (learning.levAdjust !== 0) {
     reasons.push(`learn adj`);
+  }
+
+  if (stopLoss !== null && leverage > 0) {
+    const liquidationPrice = direction === 'LONG'
+      ? entryPrice * (1 - 1 / leverage)
+      : entryPrice * (1 + 1 / leverage);
+
+    const unreachable = direction === 'LONG'
+      ? stopLoss < liquidationPrice
+      : stopLoss > liquidationPrice;
+
+    if (unreachable) {
+      stopLoss = null;
+      reasons.push('no SL (past liq)');
+    }
   }
 
   return {

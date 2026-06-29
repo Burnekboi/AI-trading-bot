@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS active_positions (
   target_profit DOUBLE PRECISION,
   leverage INTEGER NOT NULL DEFAULT 10,
   strategy_name TEXT NOT NULL,
-  timer_expires_at BIGINT
+  timer_expires_at BIGINT,
+  partial_tp_hit BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS performance_log (
