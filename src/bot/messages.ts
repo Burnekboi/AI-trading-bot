@@ -30,12 +30,18 @@ export function buildWelcomeText(address: string): string {
   );
 }
 
+function liquidationPrice(position: ActivePosition): number {
+  return position.direction === 'LONG'
+    ? position.entryPrice * (1 - 1 / position.leverage)
+    : position.entryPrice * (1 + 1 / position.leverage);
+}
+
 export function buildActivePositionText(position: ActivePosition): string {
   const emoji = directionEmoji(position.direction);
   const pair = formatSymbolDisplay(position.symbol);
   const sl = position.stopLoss
     ? formatPrice(position.stopLoss)
-    : 'None';
+    : `None (liq @ ${formatPrice(liquidationPrice(position))})`;
   const tp = position.targetProfit
     ? formatPrice(position.targetProfit)
     : 'None';
@@ -82,7 +88,9 @@ export function buildClosedPositionText(
     ? `🎯 Target profit: ${formatPrice(position.targetProfit)}`
     : !isWin && position.stopLoss
       ? `🔴 Stop loss: ${formatPrice(position.stopLoss)}`
-      : '';
+      : !isWin
+        ? `🔴 Stop loss: None (liq @ ${formatPrice(liquidationPrice(position))})`
+        : '';
 
   const partialTpLine = position.partialTpHit
     ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT realized)\n`
