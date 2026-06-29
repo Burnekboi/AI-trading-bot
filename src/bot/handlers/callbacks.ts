@@ -103,6 +103,7 @@ async function processTradeAmount(
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Trade execution failed.';
+      console.error('[Trade Error]', error);
       await ctx.reply(`❌ ${message}`);
       clearSession(chatId);
     }

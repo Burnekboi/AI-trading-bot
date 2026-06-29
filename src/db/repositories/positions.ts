@@ -95,7 +95,7 @@ export async function createPosition(position: ActivePosition): Promise<number> 
     .select('id')
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(`DB insert failed: ${error.message} (${error.details ?? error.hint ?? 'no details'})`);
   position.id = data.id;
   return data.id;
 }
