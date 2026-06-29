@@ -20,16 +20,17 @@ async function main(): Promise<void> {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  type TableConfig = { name: string; key: string };
+  type TableConfig = { name: string; key: string; isNumeric: boolean };
   const tables: TableConfig[] = [
-    { name: 'active_positions', key: 'id' },
-    { name: 'performance_log', key: 'id' },
-    { name: 'strategy_penalties', key: 'strategy_name' },
-    { name: 'users', key: 'chat_id' },
+    { name: 'active_positions', key: 'id', isNumeric: true },
+    { name: 'performance_log', key: 'id', isNumeric: true },
+    { name: 'strategy_penalties', key: 'strategy_name', isNumeric: false },
+    { name: 'users', key: 'chat_id', isNumeric: true },
   ];
 
-  for (const { name, key } of tables) {
-    const { error } = await supabase.from(name).delete().neq(key, key === 'chat_id' ? 0 : '');
+  for (const { name, key, isNumeric } of tables) {
+    const filterValue = isNumeric ? -1 : '__DELETE_ALL__';
+    const { error } = await supabase.from(name).delete().neq(key, filterValue);
     if (error && error.code !== 'PGRST116') {
       console.error(`Error deleting from ${name}:`, error.message);
     } else {
