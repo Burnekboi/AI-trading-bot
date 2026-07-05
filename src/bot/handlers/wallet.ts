@@ -8,14 +8,12 @@ import {
   takePromptMessageIds,
 } from '../session';
 import {
-  CREATE_WALLET_TEXT,
   IMPORT_WALLET_PROMPT,
   WALLET_DELETED_TEXT,
   buildCreateWalletResultText,
   buildRealDashboardText,
 } from '../messages';
 import {
-  createWalletKeyboard,
   importWalletResultKeyboard,
   realDashboardKeyboard,
 } from '../keyboards';
@@ -46,16 +44,21 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const wallet = await getWallet(chatId);
-    if (wallet) {
+    const existing = await getWallet(chatId);
+    if (existing) {
       await ctx.reply('You already have a wallet. Delete it first before creating a new one.');
       return;
     }
 
+    const randomWallet = ethers.Wallet.createRandom();
+    const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20');
+
+    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
+
     if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(CREATE_WALLET_TEXT, {
+      await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        ...createWalletKeyboard(),
+        ...importWalletResultKeyboard(),
       });
     }
   });
