@@ -7,11 +7,14 @@ import {
   isStopLossHit,
   isTakeProfitHit,
   isPartialTpTriggered,
+  isLiquidationHit,
+  getLiquidationPrice,
   autoStartTrade,
   savePosition,
 } from './tradeService';
 import { updatePositionPartialTp } from '../db/repositories/positions';
 import { getUser, updateUserBalance } from '../db/repositories/users';
+import { logPerformance } from '../db/repositories/performance';
 import {
   buildClosedPositionText,
   buildActivePositionText,
@@ -49,7 +52,7 @@ export function startPositionMonitor(bot: Telegraf): void {
               const newBalance = user.usdtBalance + realizedPnl;
               await updateUserBalance(position.chatId, newBalance);
 
-              const newStopLoss = position.entryPrice;
+              const newStopLoss = null;
               await updatePositionPartialTp(
                 position.id!,
                 newStopLoss,
@@ -57,6 +60,23 @@ export function startPositionMonitor(bot: Telegraf): void {
               );
               position.partialTpHit = true;
               position.stopLoss = newStopLoss;
+
+              await logPerformance({
+                chatId: position.chatId,
+                strategyName: position.strategyName,
+                symbol: position.symbol,
+                direction: position.direction,
+                entryPrice: position.entryPrice,
+                exitPrice: currentPrice,
+                stopLoss: null,
+                targetProfit: position.targetProfit,
+                allocatedAmount: position.allocatedAmount,
+                closingStatus: 'Ended',
+                pnlUsdt: realizedPnl,
+                wasProfitable: true,
+              }).catch((err) => {
+                console.error('logPerformance for 1st TP failed (non-fatal):', err);
+              });
 
               const text = buildActivePositionText(position);
               try {
@@ -87,13 +107,30 @@ export function startPositionMonitor(bot: Telegraf): void {
           position.targetProfit
         );
 
-        if (!timerExpired && !slHit && !tpHit) continue;
+        const liqPrice = getLiquidationPrice(
+          position.direction,
+          position.entryPrice,
+          position.leverage
+        );
+
+        const liqHit = isLiquidationHit(
+          position.direction,
+          position.entryPrice,
+          currentPrice,
+          position.leverage
+        );
+
+        if (!timerExpired && !liqHit && !slHit && !tpHit) continue;
+
+        const exitPrice = liqHit
+          ? liqPrice
+          : currentPrice;
 
         const { result } = await closePositionByMessage(
           position.chatId,
           position.messageId,
           'Ended..',
-          currentPrice
+          exitPrice
         );
         const text = buildClosedPositionText(position, result);
 
@@ -109,7 +146,7 @@ export function startPositionMonitor(bot: Telegraf): void {
           // Message may have been deleted
         }
 
-        if (slHit || tpHit) {
+        if (slHit || tpHit || liqHit) {
           const next = await autoStartTrade(position.chatId);
           if (next) {
             const cardText = buildActivePositionText(next);

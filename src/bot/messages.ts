@@ -70,6 +70,7 @@ export function buildClosedPositionText(
   const emoji = directionEmoji(position.direction);
   const pair = formatSymbolDisplay(position.symbol);
   const isWin = result.pnlUsdt >= 0;
+  const isLiquidation = !isWin && position.stopLoss === null;
 
   let statusEmoji: string;
   let statusText: string;
@@ -79,6 +80,9 @@ export function buildClosedPositionText(
   } else if (isWin) {
     statusEmoji = '🟢';
     statusText = 'TARGET HIT';
+  } else if (isLiquidation) {
+    statusEmoji = '💀';
+    statusText = 'LIQUIDATED';
   } else {
     statusEmoji = '🔴';
     statusText = 'STOP LOSS HIT';

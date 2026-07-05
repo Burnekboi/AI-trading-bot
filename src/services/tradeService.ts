@@ -67,6 +67,29 @@ export function isTakeProfitHit(
   return currentPrice <= targetProfit;
 }
 
+export function isLiquidationHit(
+  direction: TradeDirection,
+  entryPrice: number,
+  currentPrice: number,
+  leverage: number
+): boolean {
+  if (direction === 'LONG') {
+    return currentPrice <= entryPrice * (1 - 1 / leverage);
+  }
+  return currentPrice >= entryPrice * (1 + 1 / leverage);
+}
+
+export function getLiquidationPrice(
+  direction: TradeDirection,
+  entryPrice: number,
+  leverage: number
+): number {
+  if (direction === 'LONG') {
+    return entryPrice * (1 - 1 / leverage);
+  }
+  return entryPrice * (1 + 1 / leverage);
+}
+
 export async function executeTrade(
   chatId: number,
   allocatedAmount: number,
