@@ -1,4 +1,4 @@
-import type { ActivePosition, ClosePositionResult, PerformanceRecord } from '../types';
+import type { AccountMode, ActivePosition, ClosePositionResult, PerformanceRecord } from '../types';
 import {
   directionEmoji,
   formatBalance,
@@ -10,21 +10,27 @@ import {
 export function buildDashboardText(
   address: string,
   usdtBalance: number,
-  usdcBalance: number
+  usdcBalance: number,
+  accountMode: AccountMode = 'simulation'
 ): string {
+  const modeLabel = accountMode === 'simulation' ? '🧪 SIMULATION' : '💵 REAL MONEY';
+  const extraLine = accountMode === 'real'
+    ? `\n⚠️ <b>Real money trading</b> features are coming soon.`
+    : '';
   return (
-    `🤖 <b>AI Simulator Active Account</b>\n` +
+    `🤖 <b>AI Trading Bot</b>\n` +
     `Address: <code>${address}</code>\n\n` +
-    `💵 <b>Simulated Balances:</b>\n` +
-    `• USDT: ${formatBalance(usdtBalance)}\n` +
-    `• USDC: ${formatBalance(usdcBalance)}`
+    `🎮 Mode: ${modeLabel}\n` +
+    `💵 <b>Balance:</b> ${formatBalance(usdtBalance)} USDT` +
+    extraLine
   );
 }
 
 export function buildWelcomeText(address: string): string {
   return (
-    `👋 Welcome to the <b>AI Trade Simulator</b>!\n\n` +
-    `Your simulated wallet has been credited with <b>100.00 USDT</b>.\n` +
+    `👋 Welcome to the <b>AI Trade Bot</b>!\n\n` +
+    `Your wallet has been credited with <b>100.00 USDT</b>.\n` +
+    `You are currently in <b>SIMULATION</b> mode.\n` +
     `Address: <code>${address}</code>\n\n` +
     `Tap the dashboard to start paper trading with real MEXC market data.`
   );

@@ -8,6 +8,7 @@ export type UserStep =
   | null;
 
 export type TradeMode = 'market' | 'limit';
+export type AccountMode = 'simulation' | 'real';
 
 export interface UserProfile {
   chatId: number;
@@ -17,6 +18,7 @@ export interface UserProfile {
   currentStep: UserStep;
   lastTradeAmount: number | null;
   lastTradeMode: TradeMode | null;
+  accountMode: AccountMode;
 }
 
 export interface ActivePosition {

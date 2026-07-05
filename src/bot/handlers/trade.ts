@@ -1,5 +1,5 @@
 import { Context, Telegraf } from 'telegraf';
-import { getUser, setUserStep } from '../../db/repositories/users';
+import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
 import { getUserPositions } from '../../db/repositories/positions';
 import {
   addPromptMessage,
@@ -23,6 +23,45 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
       await ctx.reply('Please send /start to initialize your account.');
       return;
     }
+
+    const positions = await getUserPositions(chatId);
+    const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
+    const available = user.usdtBalance - allocated;
+
+    clearSession(chatId);
+    setTradeMode(chatId, 'market');
+    await setUserStep(chatId, 'awaiting_trade_amount');
+
+    const text = promptTradeAmount(available);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    }
+  });
+
+  bot.action('simulation_trade', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const user = await getUser(chatId);
+    if (!user) {
+      await ctx.reply('Please send /start to initialize your account.');
+      return;
+    }
+
+    await updateAccountMode(chatId, 'simulation');
+    user.accountMode = 'simulation';
 
     const positions = await getUserPositions(chatId);
     const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);

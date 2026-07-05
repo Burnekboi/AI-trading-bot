@@ -1,5 +1,5 @@
 import { Context, Telegraf } from 'telegraf';
-import { getUser, setUserStep, updateUserLastTrade } from '../../db/repositories/users';
+import { getUser, setUserStep, updateAccountMode, updateUserLastTrade } from '../../db/repositories/users';
 import { getUserPositions } from '../../db/repositories/positions';
 import {
   executeMultipleTrades,
@@ -29,6 +29,7 @@ import {
 } from '../messages';
 import { activityKeyboard, activityListKeyboard, backKeyboard, mainDashboardKeyboard, positionKeyboard, statsKeyboard } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
+import type { AccountMode, UserProfile } from '../../types';
 
 async function deletePromptMessages(
   ctx: Context,
@@ -266,11 +267,12 @@ export function registerStopTradingHandler(bot: Telegraf<Context>): void {
         const dashboard = buildDashboardText(
           user.address,
           user.usdtBalance,
-          user.usdcBalance
+          user.usdcBalance,
+          user.accountMode
         );
         await ctx.reply(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0),
+          ...mainDashboardKeyboard(remaining > 0, user.accountMode),
         });
       }
     } catch (error) {
@@ -297,11 +299,12 @@ export function registerStopAllHandler(bot: Telegraf<Context>): void {
         const dashboard = buildDashboardText(
           user.address,
           user.usdtBalance,
-          user.usdcBalance
+          user.usdcBalance,
+          user.accountMode
         );
         await ctx.editMessageText(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(false),
+          ...mainDashboardKeyboard(false, user.accountMode),
         });
       }
 
@@ -333,11 +336,12 @@ export function registerStopLastHandler(bot: Telegraf<Context>): void {
         const dashboard = buildDashboardText(
           user.address,
           user.usdtBalance,
-          user.usdcBalance
+          user.usdcBalance,
+          user.accountMode
         );
         await ctx.editMessageText(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0),
+          ...mainDashboardKeyboard(remaining > 0, user.accountMode),
         });
       }
 
@@ -374,12 +378,13 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
     const text = buildDashboardText(
       user.address,
       user.usdtBalance,
-      user.usdcBalance
+      user.usdcBalance,
+      user.accountMode
     );
 
     await ctx.editMessageText(text, {
       parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions),
+      ...mainDashboardKeyboard(hasPositions, user.accountMode),
     });
   });
 }
@@ -446,6 +451,74 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
         ...activityKeyboard(),
       });
     }
+  });
+}
+
+function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): void {
+  const text = buildDashboardText(
+    user.address,
+    user.usdtBalance,
+    user.usdcBalance,
+    user.accountMode
+  );
+
+  if (ctx.callbackQuery?.message) {
+    ctx.editMessageText(text, {
+      parse_mode: 'HTML',
+      ...mainDashboardKeyboard(hasPositions, user.accountMode),
+    }).catch(() => {});
+  } else {
+    ctx.reply(text, {
+      parse_mode: 'HTML',
+      ...mainDashboardKeyboard(hasPositions, user.accountMode),
+    });
+  }
+}
+
+async function switchMode(ctx: Context, chatId: number, mode: AccountMode): Promise<void> {
+  await ctx.answerCbQuery();
+  const user = await getUser(chatId);
+  if (!user) {
+    await ctx.reply('Please send /start to initialize your account.');
+    return;
+  }
+
+  await updateAccountMode(chatId, mode);
+  user.accountMode = mode;
+
+  const positions = await getUserPositions(chatId);
+  showDashboard(ctx, user, positions.length > 0);
+}
+
+export function registerModeHandlers(bot: Telegraf<Context>): void {
+  bot.action('start_simulation', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await switchMode(ctx, chatId, 'simulation');
+  });
+
+  bot.action('start_real_money', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await switchMode(ctx, chatId, 'real');
+  });
+
+  bot.action('switch_to_simulation', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await switchMode(ctx, chatId, 'simulation');
+  });
+
+  bot.action('switch_to_real', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await switchMode(ctx, chatId, 'real');
+  });
+
+  bot.action('real_trade', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await switchMode(ctx, chatId, 'real');
   });
 }
 

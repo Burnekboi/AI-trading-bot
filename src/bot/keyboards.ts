@@ -1,24 +1,41 @@
 import { Markup } from 'telegraf';
+import type { AccountMode } from '../types';
 
-export const dashboardKeyboard = () =>
+export const modeSelectKeyboard = () =>
   Markup.inlineKeyboard([
-  [Markup.button.callback('📊 Open Dashboard', 'open_dashboard')],
+  [Markup.button.callback('🧪 SIMULATION', 'start_simulation')],
+  [Markup.button.callback('💵 REAL MONEY', 'start_real_money')],
 ]);
 
-export const mainDashboardKeyboard = (hasActivePositions: boolean = false) =>
+export const mainDashboardKeyboard = (
+  hasActivePositions: boolean = false,
+  currentMode: AccountMode = 'simulation'
+) =>
   Markup.inlineKeyboard([
   [
-    Markup.button.callback('🚀 TRADE', 'trade_market'),
-    Markup.button.callback('⏳ LIMIT TRADE', 'trade_limit'),
+    Markup.button.callback(
+      currentMode === 'simulation' ? '✅ SIMULATION' : '🧪 SIMULATION',
+      'switch_to_simulation'
+    ),
+    Markup.button.callback(
+      currentMode === 'real' ? '✅ REAL MONEY' : '💵 REAL MONEY',
+      'switch_to_real'
+    ),
   ],
-  ...(hasActivePositions ? [
+  ...(currentMode === 'simulation' ? [
     [
-      Markup.button.callback('🛑 STOP TRADING', 'stop_last_trading'),
-      Markup.button.callback('🛑 STOP ALL', 'stop_all'),
+      Markup.button.callback('🚀 TRADE', 'simulation_trade'),
+      Markup.button.callback('⏳ LIMIT TRADE', 'trade_limit'),
     ],
-    [
-      Markup.button.callback('📊 ACTIVITY', 'open_activity'),
-    ],
+    ...(hasActivePositions ? [
+      [
+        Markup.button.callback('🛑 STOP TRADING', 'stop_last_trading'),
+        Markup.button.callback('🛑 STOP ALL', 'stop_all'),
+      ],
+      [
+        Markup.button.callback('📊 ACTIVITY', 'open_activity'),
+      ],
+    ] : []),
   ] : []),
   [
     Markup.button.callback('📊 STATS', 'open_stats'),

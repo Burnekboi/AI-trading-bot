@@ -4,6 +4,7 @@ import { registerDashboardHandler } from './handlers/dashboard';
 import { registerTradeHandlers } from './handlers/trade';
 import {
   registerActivityHandlers,
+  registerModeHandlers,
   registerTextInputHandler,
   registerStopTradingHandler,
   registerStopAllHandler,
@@ -20,6 +21,7 @@ export function createBot(token: string): Telegraf<Context> {
   registerStartHandler(bot);
   registerDashboardHandler(bot);
   registerTradeHandlers(bot);
+  registerModeHandlers(bot);
   registerTextInputHandler(bot);
   registerStopTradingHandler(bot);
   registerStopAllHandler(bot);

@@ -21,18 +21,19 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
     const text = buildDashboardText(
       user.address,
       user.usdtBalance,
-      user.usdcBalance
+      user.usdcBalance,
+      user.accountMode
     );
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        ...mainDashboardKeyboard(hasPositions),
+        ...mainDashboardKeyboard(hasPositions, user.accountMode),
       });
     } else {
       await ctx.reply(text, {
         parse_mode: 'HTML',
-        ...mainDashboardKeyboard(hasPositions),
+        ...mainDashboardKeyboard(hasPositions, user.accountMode),
       });
     }
   });
