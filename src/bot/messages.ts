@@ -61,6 +61,17 @@ export function buildImportWalletResultText(address: string): string {
   );
 }
 
+export function buildCreateWalletResultText(address: string, privateKey: string): string {
+  return (
+    `💼 <b>Wallet Created</b>\n\n` +
+    `Account: <code>${address}</code>\n` +
+    `PK: <code>${privateKey}</code>\n\n` +
+    `ERC-20 bal.: USDT 0.00, USDC 0.00\n` +
+    `BEP-20 bal.: USDT 0.00, USDC 0.00\n\n` +
+    `Select network to use as trade account:`
+  );
+}
+
 export const WALLET_DELETED_TEXT =
   `🗑 <b>Wallet Deleted</b>\n\nYour wallet has been removed.`;
 

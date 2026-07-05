@@ -1,6 +1,7 @@
 import { Context, Markup, Telegraf } from 'telegraf';
-import { getUser, setUserStep } from '../../db/repositories/users';
-import { getWallet, deleteWallet } from '../../db/repositories/wallets';
+import { ethers } from 'ethers';
+import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
+import { getWallet, createWallet, deleteWallet, updateWalletNetwork } from '../../db/repositories/wallets';
 import {
   addPromptMessage,
   clearSession,
@@ -10,6 +11,7 @@ import {
   CREATE_WALLET_TEXT,
   IMPORT_WALLET_PROMPT,
   WALLET_DELETED_TEXT,
+  buildCreateWalletResultText,
   buildRealDashboardText,
 } from '../messages';
 import {
@@ -17,8 +19,7 @@ import {
   importWalletResultKeyboard,
   realDashboardKeyboard,
 } from '../keyboards';
-import type { AccountMode } from '../../types';
-import { updateAccountMode } from '../../db/repositories/users';
+import type { AccountMode, WalletNetwork } from '../../types';
 
 async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
   const user = await getUser(chatId);
@@ -129,11 +130,41 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
   });
 
   bot.action('create_wallet_erc20', async (ctx) => {
-    await ctx.answerCbQuery('ERC-20 wallet creation coming soon!');
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const randomWallet = ethers.Wallet.createRandom();
+    const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20');
+    await setUserStep(chatId, null);
+
+    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...importWalletResultKeyboard(),
+      });
+    }
   });
 
   bot.action('create_wallet_bep20', async (ctx) => {
-    await ctx.answerCbQuery('BEP-20 wallet creation coming soon!');
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const randomWallet = ethers.Wallet.createRandom();
+    const wallet = await createWallet(chatId, randomWallet.privateKey, 'BEP20');
+    await setUserStep(chatId, null);
+
+    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...importWalletResultKeyboard(),
+      });
+    }
   });
 
   bot.action('create_wallet_back', async (ctx) => {
@@ -143,11 +174,59 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
   });
 
   bot.action('import_wallet_erc20', async (ctx) => {
-    await ctx.answerCbQuery('ERC-20 balance display coming soon!');
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    await updateWalletNetwork(chatId, 'ERC20');
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) return;
+
+    const text =
+      `📥 <b>Wallet Imported</b>\n` +
+      `Network: <b>ERC-20 (ETH)</b>\n` +
+      `Address: <code>${wallet.address}</code>\n\n` +
+      `💰 <b>Balances:</b>\n` +
+      `• USDT (ERC-20): 0.00\n` +
+      `• USDC (ERC-20): 0.00\n` +
+      `• USDT (BEP-20): 0.00\n` +
+      `• USDC (BEP-20): 0.00`;
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...importWalletResultKeyboard(),
+      });
+    }
   });
 
   bot.action('import_wallet_bep20', async (ctx) => {
-    await ctx.answerCbQuery('BEP-20 balance display coming soon!');
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    await updateWalletNetwork(chatId, 'BEP20');
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) return;
+
+    const text =
+      `📥 <b>Wallet Imported</b>\n` +
+      `Network: <b>BEP-20 (BNB)</b>\n` +
+      `Address: <code>${wallet.address}</code>\n\n` +
+      `💰 <b>Balances:</b>\n` +
+      `• USDT (ERC-20): 0.00\n` +
+      `• USDC (ERC-20): 0.00\n` +
+      `• USDT (BEP-20): 0.00\n` +
+      `• USDC (BEP-20): 0.00`;
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...importWalletResultKeyboard(),
+      });
+    }
   });
 
   bot.action('import_wallet_back', async (ctx) => {

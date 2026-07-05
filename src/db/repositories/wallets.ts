@@ -52,6 +52,15 @@ export async function createWallet(
   };
 }
 
+export async function updateWalletNetwork(chatId: number, network: WalletNetwork): Promise<void> {
+  const { error } = await supabase
+    .from('wallets')
+    .update({ network })
+    .eq('chat_id', chatId);
+
+  if (error) throw error;
+}
+
 export async function deleteWallet(chatId: number): Promise<void> {
   const { error } = await supabase
     .from('wallets')
