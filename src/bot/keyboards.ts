@@ -1,5 +1,4 @@
 import { Markup } from 'telegraf';
-import type { AccountMode } from '../types';
 
 export const modeSelectKeyboard = () =>
   Markup.inlineKeyboard([
@@ -7,40 +6,64 @@ export const modeSelectKeyboard = () =>
   [Markup.button.callback('💵 REAL MONEY', 'start_real_money')],
 ]);
 
-export const mainDashboardKeyboard = (
-  hasActivePositions: boolean = false,
-  currentMode: AccountMode = 'simulation'
-) =>
+export const mainDashboardKeyboard = (hasActivePositions: boolean = false) =>
   Markup.inlineKeyboard([
   [
-    Markup.button.callback(
-      currentMode === 'simulation' ? '✅ SIMULATION' : '🧪 SIMULATION',
-      'switch_to_simulation'
-    ),
-    Markup.button.callback(
-      currentMode === 'real' ? '✅ REAL MONEY' : '💵 REAL MONEY',
-      'switch_to_real'
-    ),
+    Markup.button.callback('🚀 TRADE', 'simulation_trade'),
+    Markup.button.callback('⏳ LIMIT TRADE', 'trade_limit'),
   ],
-  ...(currentMode === 'simulation' ? [
+  ...(hasActivePositions ? [
     [
-      Markup.button.callback('🚀 TRADE', 'simulation_trade'),
-      Markup.button.callback('⏳ LIMIT TRADE', 'trade_limit'),
+      Markup.button.callback('🛑 STOP TRADING', 'stop_last_trading'),
+      Markup.button.callback('🛑 STOP ALL', 'stop_all'),
     ],
-    ...(hasActivePositions ? [
-      [
-        Markup.button.callback('🛑 STOP TRADING', 'stop_last_trading'),
-        Markup.button.callback('🛑 STOP ALL', 'stop_all'),
-      ],
-      [
-        Markup.button.callback('📊 ACTIVITY', 'open_activity'),
-      ],
-    ] : []),
+    [
+      Markup.button.callback('📊 ACTIVITY', 'open_activity'),
+    ],
   ] : []),
   [
     Markup.button.callback('📊 STATS', 'open_stats'),
     Markup.button.callback('📈 MARKET DATA', 'market_data'),
   ],
+  [
+    Markup.button.callback('💵 REAL MONEY', 'switch_to_real'),
+  ],
+]);
+
+export const realDashboardKeyboard = (hasWallet: boolean) =>
+  Markup.inlineKeyboard([
+  ...(hasWallet ? [
+    [
+      Markup.button.callback('📥 Import Wallet', 'real_import_wallet'),
+      Markup.button.callback('🗑 Delete Wallet', 'real_delete_wallet'),
+    ],
+  ] : [
+    [
+      Markup.button.callback('💼 Create Wallet', 'real_create_wallet'),
+      Markup.button.callback('📥 Import Wallet', 'real_import_wallet'),
+    ],
+  ]),
+  [
+    Markup.button.callback('⬅️ Back', 'real_back'),
+  ],
+]);
+
+export const createWalletKeyboard = () =>
+  Markup.inlineKeyboard([
+  [
+    Markup.button.callback('ERC-20 (ETH)', 'create_wallet_erc20'),
+    Markup.button.callback('BEP-20 (BNB)', 'create_wallet_bep20'),
+  ],
+  [Markup.button.callback('⬅️ Back', 'create_wallet_back')],
+]);
+
+export const importWalletResultKeyboard = () =>
+  Markup.inlineKeyboard([
+  [
+    Markup.button.callback('ERC-20 (ETH)', 'import_wallet_erc20'),
+    Markup.button.callback('BEP-20 (BNB)', 'import_wallet_bep20'),
+  ],
+  [Markup.button.callback('⬅️ Back', 'import_wallet_back')],
 ]);
 
 export const statsKeyboard = () =>

@@ -28,12 +28,12 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        ...mainDashboardKeyboard(hasPositions, user.accountMode),
+        ...mainDashboardKeyboard(hasPositions),
       });
     } else {
       await ctx.reply(text, {
         parse_mode: 'HTML',
-        ...mainDashboardKeyboard(hasPositions, user.accountMode),
+        ...mainDashboardKeyboard(hasPositions),
       });
     }
   });

@@ -13,6 +13,7 @@ import {
   registerStatsHandlers,
 } from './handlers/callbacks';
 import { registerMarketDataHandler } from './handlers/marketData';
+import { registerWalletHandlers } from './handlers/wallet';
 import { startPositionMonitor } from '../services/positionMonitor';
 
 export function createBot(token: string): Telegraf<Context> {
@@ -30,6 +31,7 @@ export function createBot(token: string): Telegraf<Context> {
   registerBackToDashboardHandler(bot);
   registerStatsHandlers(bot);
   registerMarketDataHandler(bot);
+  registerWalletHandlers(bot);
 
   bot.catch((error, ctx) => {
     console.error(`Bot error for update ${ctx.updateType}:`, error);

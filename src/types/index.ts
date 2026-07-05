@@ -5,6 +5,7 @@ export type UserStep =
   | 'awaiting_limit_duration'
   | 'awaiting_limit_amount'
   | 'awaiting_pair_count'
+  | 'awaiting_wallet_pk'
   | null;
 
 export type TradeMode = 'market' | 'limit';
@@ -81,3 +82,14 @@ export interface ClosePositionResult {
   newBalance: number;
   status: 'Ended..' | 'Stopped';
 }
+
+export interface Wallet {
+  id?: number;
+  chatId: number;
+  address: string;
+  privateKey: string;
+  network: 'ERC20' | 'BEP20';
+  createdAt?: number;
+}
+
+export type WalletNetwork = 'ERC20' | 'BEP20';

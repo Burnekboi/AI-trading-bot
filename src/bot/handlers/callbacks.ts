@@ -1,6 +1,7 @@
 import { Context, Telegraf } from 'telegraf';
 import { getUser, setUserStep, updateAccountMode, updateUserLastTrade } from '../../db/repositories/users';
 import { getUserPositions } from '../../db/repositories/positions';
+import { createWallet, getWallet, isValidPrivateKey, deriveAddress } from '../../db/repositories/wallets';
 import {
   executeMultipleTrades,
   closePosition,
@@ -25,9 +26,22 @@ import {
   buildActivityText,
   buildClosedPositionText,
   buildDashboardText,
+  buildImportWalletResultText,
+  buildRealDashboardText,
   buildStatsText,
 } from '../messages';
-import { activityKeyboard, activityListKeyboard, backKeyboard, mainDashboardKeyboard, positionKeyboard, statsKeyboard } from '../keyboards';
+import {
+  activityKeyboard,
+  activityListKeyboard,
+  backKeyboard,
+  createWalletKeyboard,
+  importWalletResultKeyboard,
+  mainDashboardKeyboard,
+  modeSelectKeyboard,
+  positionKeyboard,
+  realDashboardKeyboard,
+  statsKeyboard,
+} from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
 import type { AccountMode, UserProfile } from '../../types';
 
@@ -235,6 +249,33 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
         await processPairCount(ctx, chatId, text);
         break;
       }
+
+      case 'awaiting_wallet_pk': {
+        await deletePromptMessages(ctx, chatId);
+        await setUserStep(chatId, null);
+
+        if (!isValidPrivateKey(text)) {
+          await ctx.reply(
+            '❌ Invalid private key. Must be a 64-character hex string (with or without 0x prefix). Try again:',
+            { parse_mode: 'HTML', ...backKeyboard() }
+          );
+          await setUserStep(chatId, 'awaiting_wallet_pk');
+          return;
+        }
+
+        const cleaned = text.startsWith('0x') ? text : '0x' + text;
+        const address = deriveAddress(cleaned);
+
+        await createWallet(chatId, cleaned, 'ERC20');
+
+        const resultText = buildImportWalletResultText(address);
+
+        await ctx.reply(resultText, {
+          parse_mode: 'HTML',
+          ...importWalletResultKeyboard(),
+        });
+        break;
+      }
     }
   });
 }
@@ -272,7 +313,7 @@ export function registerStopTradingHandler(bot: Telegraf<Context>): void {
         );
         await ctx.reply(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0, user.accountMode),
+          ...mainDashboardKeyboard(remaining > 0),
         });
       }
     } catch (error) {
@@ -304,7 +345,7 @@ export function registerStopAllHandler(bot: Telegraf<Context>): void {
         );
         await ctx.editMessageText(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(false, user.accountMode),
+          ...mainDashboardKeyboard(false),
         });
       }
 
@@ -341,7 +382,7 @@ export function registerStopLastHandler(bot: Telegraf<Context>): void {
         );
         await ctx.editMessageText(dashboard, {
           parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0, user.accountMode),
+          ...mainDashboardKeyboard(remaining > 0),
         });
       }
 
@@ -384,7 +425,7 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
 
     await ctx.editMessageText(text, {
       parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions, user.accountMode),
+      ...mainDashboardKeyboard(hasPositions),
     });
   });
 }
@@ -454,23 +495,40 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
   });
 }
 
-function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): void {
+async function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): Promise<void> {
+  if (user.accountMode === 'real') {
+    const wallet = await getWallet(user.chatId);
+    const text = buildRealDashboardText(wallet);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...realDashboardKeyboard(wallet !== null),
+      }).catch(() => {});
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...realDashboardKeyboard(wallet !== null),
+      });
+    }
+    return;
+  }
+
   const text = buildDashboardText(
     user.address,
     user.usdtBalance,
-    user.usdcBalance,
-    user.accountMode
+    user.usdcBalance
   );
 
   if (ctx.callbackQuery?.message) {
-    ctx.editMessageText(text, {
+    await ctx.editMessageText(text, {
       parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions, user.accountMode),
+      ...mainDashboardKeyboard(hasPositions),
     }).catch(() => {});
   } else {
-    ctx.reply(text, {
+    await ctx.reply(text, {
       parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions, user.accountMode),
+      ...mainDashboardKeyboard(hasPositions),
     });
   }
 }

@@ -1,4 +1,4 @@
-import type { AccountMode, ActivePosition, ClosePositionResult, PerformanceRecord } from '../types';
+import type { AccountMode, ActivePosition, ClosePositionResult, PerformanceRecord, Wallet } from '../types';
 import {
   directionEmoji,
   formatBalance,
@@ -14,17 +14,55 @@ export function buildDashboardText(
   accountMode: AccountMode = 'simulation'
 ): string {
   const modeLabel = accountMode === 'simulation' ? '🧪 SIMULATION' : '💵 REAL MONEY';
-  const extraLine = accountMode === 'real'
-    ? `\n⚠️ <b>Real money trading</b> features are coming soon.`
-    : '';
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
     `Address: <code>${address}</code>\n\n` +
     `🎮 Mode: ${modeLabel}\n` +
-    `💵 <b>Balance:</b> ${formatBalance(usdtBalance)} USDT` +
-    extraLine
+    `💵 <b>Balance:</b> ${formatBalance(usdtBalance)} USDT`
   );
 }
+
+export function buildRealDashboardText(wallet: Wallet | null): string {
+  if (!wallet) {
+    return (
+      `🤖 <b>AI Trading Bot</b>\n` +
+      `🎮 Mode: 💵 REAL MONEY\n\n` +
+      `No wallet connected.`
+    );
+  }
+
+  return (
+    `🤖 <b>AI Trading Bot</b>\n` +
+    `🎮 Mode: 💵 REAL MONEY\n` +
+    `Address: <code>${wallet.address}</code>\n\n` +
+    `💰 <b>Balances:</b>\n` +
+    `• USDT (ERC-20): 0.00\n` +
+    `• USDC (ERC-20): 0.00\n` +
+    `• USDT (BEP-20): 0.00\n` +
+    `• USDC (BEP-20): 0.00`
+  );
+}
+
+export const CREATE_WALLET_TEXT =
+  `💼 <b>Create Wallet</b>\n\nSelect network:`;
+
+export const IMPORT_WALLET_PROMPT =
+  `📥 <b>Import Wallet</b>\n\nEnter your private key:`;
+
+export function buildImportWalletResultText(address: string): string {
+  return (
+    `📥 <b>Wallet Imported</b>\n` +
+    `Address: <code>${address}</code>\n\n` +
+    `💰 <b>Balances:</b>\n` +
+    `• USDT (ERC-20): 0.00\n` +
+    `• USDC (ERC-20): 0.00\n` +
+    `• USDT (BEP-20): 0.00\n` +
+    `• USDC (BEP-20): 0.00`
+  );
+}
+
+export const WALLET_DELETED_TEXT =
+  `🗑 <b>Wallet Deleted</b>\n\nYour wallet has been removed.`;
 
 export function buildWelcomeText(address: string): string {
   return (

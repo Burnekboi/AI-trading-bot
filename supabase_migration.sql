@@ -55,3 +55,13 @@ ALTER TABLE performance_log ADD COLUMN IF NOT EXISTS closing_status TEXT NOT NUL
 
 -- Account mode (simulation / real money)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS account_mode TEXT NOT NULL DEFAULT 'simulation' CHECK(account_mode IN ('simulation', 'real'));
+
+-- Wallets (one per user)
+CREATE TABLE IF NOT EXISTS wallets (
+  id BIGSERIAL PRIMARY KEY,
+  chat_id BIGINT NOT NULL UNIQUE,
+  address TEXT NOT NULL,
+  private_key TEXT NOT NULL,
+  network TEXT NOT NULL DEFAULT 'ERC20' CHECK(network IN ('ERC20', 'BEP20')),
+  created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+);
