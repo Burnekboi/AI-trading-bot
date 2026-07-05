@@ -1,4 +1,4 @@
-import { Context, Telegraf } from 'telegraf';
+import { Context, Markup, Telegraf } from 'telegraf';
 import { getUser, setUserStep } from '../../db/repositories/users';
 import { getWallet, deleteWallet } from '../../db/repositories/wallets';
 import {
@@ -13,7 +13,6 @@ import {
   buildRealDashboardText,
 } from '../messages';
 import {
-  backKeyboard,
   createWalletKeyboard,
   importWalletResultKeyboard,
   realDashboardKeyboard,
@@ -74,16 +73,21 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     clearSession(chatId);
     await setUserStep(chatId, 'awaiting_wallet_pk');
 
+    const walletBackKeyboard = () =>
+      Markup.inlineKeyboard([
+      [Markup.button.callback('⬅️ Back', 'import_wallet_back')],
+    ]);
+
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(IMPORT_WALLET_PROMPT, {
         parse_mode: 'HTML',
-        ...backKeyboard(),
+        ...walletBackKeyboard(),
       });
       addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
     } else {
       const msg = await ctx.reply(IMPORT_WALLET_PROMPT, {
         parse_mode: 'HTML',
-        ...backKeyboard(),
+        ...walletBackKeyboard(),
       });
       addPromptMessage(chatId, msg.message_id);
     }
