@@ -265,19 +265,23 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           return;
         }
 
-        await deletePromptMessages(ctx, chatId);
-        await setUserStep(chatId, null);
+        try {
+          const randomWallet = ethers.Wallet.createRandom();
+          const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20', text);
 
-        const randomWallet = ethers.Wallet.createRandom();
-        const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20', text);
+          await deletePromptMessages(ctx, chatId);
+          await setUserStep(chatId, null);
 
-        const balances = await getWalletBalances(wallet.address);
-        const resultText = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
+          const balances = await getWalletBalances(wallet.address);
+          const resultText = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
 
-        await ctx.reply(resultText, {
-          parse_mode: 'HTML',
-          ...importWalletResultKeyboard(),
-        });
+          await ctx.reply(resultText, {
+            parse_mode: 'HTML',
+            ...importWalletResultKeyboard(),
+          });
+        } catch (e) {
+          await ctx.reply(`❌ Wallet creation failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        }
         break;
       }
 
@@ -308,63 +312,70 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           return;
         }
 
-        const valid = await verifyWalletPin(chatId, text);
-        if (!valid) {
-          await ctx.reply('❌ Incorrect PIN. Try again:', { parse_mode: 'HTML' });
-          return;
+        try {
+          const valid = await verifyWalletPin(chatId, text);
+          if (!valid) {
+            await ctx.reply('❌ Incorrect PIN. Try again:', { parse_mode: 'HTML' });
+            return;
+          }
+
+          await deletePromptMessages(ctx, chatId);
+          await setUserStep(chatId, null);
+
+          const wallet = await getWallet(chatId);
+          if (!wallet) {
+            await ctx.reply('Wallet not found.');
+            return;
+          }
+
+          const [balances, positions] = await Promise.all([
+            getWalletBalances(wallet.address),
+            getUserPositions(chatId),
+          ]);
+
+          const statusText = buildWalletStatusText(wallet, balances, positions.length);
+
+          await ctx.reply(statusText, {
+            parse_mode: 'HTML',
+            ...walletStatusKeyboard(),
+          });
+        } catch (e) {
+          await ctx.reply(`❌ Error: ${e instanceof Error ? e.message : 'Unknown error'}`);
         }
-
-        await deletePromptMessages(ctx, chatId);
-        await setUserStep(chatId, null);
-
-        const wallet = await getWallet(chatId);
-        if (!wallet) {
-          await ctx.reply('Wallet not found.');
-          return;
-        }
-
-        const [balances, positions] = await Promise.all([
-          getWalletBalances(wallet.address),
-          getUserPositions(chatId),
-        ]);
-
-        const statusText = buildWalletStatusText(wallet, balances, positions.length);
-
-        await ctx.reply(statusText, {
-          parse_mode: 'HTML',
-          ...walletStatusKeyboard(),
-        });
         break;
       }
 
       case 'awaiting_wallet_pk': {
         const pendingPin = getPendingPin(chatId);
 
-        await deletePromptMessages(ctx, chatId);
-        await setUserStep(chatId, null);
-
         if (!isValidPrivateKey(text)) {
           await ctx.reply(
             '❌ Invalid private key. Must be a 64-character hex string (with or without 0x prefix). Try again:',
             { parse_mode: 'HTML', ...backKeyboard() }
           );
-          await setUserStep(chatId, 'awaiting_wallet_pk');
           return;
         }
 
-        const cleaned = text.startsWith('0x') ? text : '0x' + text;
-        const address = deriveAddress(cleaned);
+        try {
+          const cleaned = text.startsWith('0x') ? text : '0x' + text;
+          const address = deriveAddress(cleaned);
 
-        await createWallet(chatId, cleaned, 'ERC20', pendingPin ?? '');
-        clearSession(chatId);
+          await createWallet(chatId, cleaned, 'ERC20', pendingPin ?? '');
+          clearSession(chatId);
 
-        const balances = await getWalletBalances(address);
-        const resultText = buildImportWalletResultText(address, balances);
+          await deletePromptMessages(ctx, chatId);
+          await setUserStep(chatId, null);
 
-        await ctx.reply(resultText, {
-          parse_mode: 'HTML',
-          ...importWalletResultKeyboard(),
-        });
+          const balances = await getWalletBalances(address);
+          const resultText = buildImportWalletResultText(address, balances);
+
+          await ctx.reply(resultText, {
+            parse_mode: 'HTML',
+            ...importWalletResultKeyboard(),
+          });
+        } catch (e) {
+          await ctx.reply(`❌ Wallet import failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        }
         break;
       }
     }
