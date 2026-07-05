@@ -17,13 +17,15 @@ import {
   importWalletResultKeyboard,
   realDashboardKeyboard,
 } from '../keyboards';
+import { getWalletBalances } from '../../services/balanceService';
 import type { AccountMode, WalletNetwork } from '../../types';
 
 async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
   const user = await getUser(chatId);
   if (!user) return;
   const wallet = await getWallet(chatId);
-  const text = buildRealDashboardText(wallet);
+  const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+  const text = buildRealDashboardText(wallet, balances);
 
   if (ctx.callbackQuery?.message) {
     await ctx.editMessageText(text, {
@@ -53,7 +55,8 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const randomWallet = ethers.Wallet.createRandom();
     const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20');
 
-    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
+    const balances = await getWalletBalances(wallet.address);
+    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {
@@ -186,15 +189,16 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const wallet = await getWallet(chatId);
     if (!wallet) return;
 
+    const balances = await getWalletBalances(wallet.address);
     const text =
       `📥 <b>Wallet Imported</b>\n` +
       `Network: <b>ERC-20 (ETH)</b>\n` +
       `Address: <code>${wallet.address}</code>\n\n` +
       `💰 <b>Balances:</b>\n` +
-      `• USDT (ERC-20): 0.00\n` +
-      `• USDC (ERC-20): 0.00\n` +
-      `• USDT (BEP-20): 0.00\n` +
-      `• USDC (BEP-20): 0.00`;
+      `• USDT (ERC-20): ${balances.erc20Usdt.toFixed(2)}\n` +
+      `• USDC (ERC-20): ${balances.erc20Usdc.toFixed(2)}\n` +
+      `• USDT (BEP-20): ${balances.bep20Usdt.toFixed(2)}\n` +
+      `• USDC (BEP-20): ${balances.bep20Usdc.toFixed(2)}`;
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {
@@ -214,15 +218,16 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const wallet = await getWallet(chatId);
     if (!wallet) return;
 
+    const balances = await getWalletBalances(wallet.address);
     const text =
       `📥 <b>Wallet Imported</b>\n` +
       `Network: <b>BEP-20 (BNB)</b>\n` +
       `Address: <code>${wallet.address}</code>\n\n` +
       `💰 <b>Balances:</b>\n` +
-      `• USDT (ERC-20): 0.00\n` +
-      `• USDC (ERC-20): 0.00\n` +
-      `• USDT (BEP-20): 0.00\n` +
-      `• USDC (BEP-20): 0.00`;
+      `• USDT (ERC-20): ${balances.erc20Usdt.toFixed(2)}\n` +
+      `• USDC (ERC-20): ${balances.erc20Usdc.toFixed(2)}\n` +
+      `• USDT (BEP-20): ${balances.bep20Usdt.toFixed(2)}\n` +
+      `• USDC (BEP-20): ${balances.bep20Usdc.toFixed(2)}`;
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {

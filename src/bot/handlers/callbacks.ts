@@ -43,6 +43,7 @@ import {
   statsKeyboard,
 } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
+import { getWalletBalances } from '../../services/balanceService';
 import type { AccountMode, UserProfile } from '../../types';
 
 async function deletePromptMessages(
@@ -268,7 +269,8 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
 
         await createWallet(chatId, cleaned, 'ERC20');
 
-        const resultText = buildImportWalletResultText(address);
+        const balances = await getWalletBalances(address);
+        const resultText = buildImportWalletResultText(address, balances);
 
         await ctx.reply(resultText, {
           parse_mode: 'HTML',
@@ -498,7 +500,8 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
 async function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): Promise<void> {
   if (user.accountMode === 'real') {
     const wallet = await getWallet(user.chatId);
-    const text = buildRealDashboardText(wallet);
+    const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+    const text = buildRealDashboardText(wallet, balances);
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {

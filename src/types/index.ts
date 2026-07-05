@@ -93,3 +93,10 @@ export interface Wallet {
 }
 
 export type WalletNetwork = 'ERC20' | 'BEP20';
+
+export interface WalletBalances {
+  erc20Usdt: number;
+  erc20Usdc: number;
+  bep20Usdt: number;
+  bep20Usdc: number;
+}

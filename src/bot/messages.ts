@@ -1,4 +1,4 @@
-import type { AccountMode, ActivePosition, ClosePositionResult, PerformanceRecord, Wallet } from '../types';
+import type { AccountMode, ActivePosition, ClosePositionResult, PerformanceRecord, Wallet, WalletBalances } from '../types';
 import {
   directionEmoji,
   formatBalance,
@@ -22,7 +22,7 @@ export function buildDashboardText(
   );
 }
 
-export function buildRealDashboardText(wallet: Wallet | null): string {
+export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletBalances): string {
   if (!wallet) {
     return (
       `🤖 <b>AI Trading Bot</b>\n` +
@@ -31,15 +31,17 @@ export function buildRealDashboardText(wallet: Wallet | null): string {
     );
   }
 
+  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
+
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
     `🎮 Mode: 💵 REAL MONEY\n` +
     `Address: <code>${wallet.address}</code>\n\n` +
     `💰 <b>Balances:</b>\n` +
-    `• USDT (ERC-20): 0.00\n` +
-    `• USDC (ERC-20): 0.00\n` +
-    `• USDT (BEP-20): 0.00\n` +
-    `• USDC (BEP-20): 0.00`
+    `• USDT (ERC-20): ${b.erc20Usdt.toFixed(2)}\n` +
+    `• USDC (ERC-20): ${b.erc20Usdc.toFixed(2)}\n` +
+    `• USDT (BEP-20): ${b.bep20Usdt.toFixed(2)}\n` +
+    `• USDC (BEP-20): ${b.bep20Usdc.toFixed(2)}`
   );
 }
 
@@ -49,25 +51,29 @@ export const CREATE_WALLET_TEXT =
 export const IMPORT_WALLET_PROMPT =
   `📥 <b>Import Wallet</b>\n\nEnter your private key:`;
 
-export function buildImportWalletResultText(address: string): string {
+export function buildImportWalletResultText(address: string, balances?: WalletBalances): string {
+  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
+
   return (
     `📥 <b>Wallet Imported</b>\n` +
     `Address: <code>${address}</code>\n\n` +
     `💰 <b>Balances:</b>\n` +
-    `• USDT (ERC-20): 0.00\n` +
-    `• USDC (ERC-20): 0.00\n` +
-    `• USDT (BEP-20): 0.00\n` +
-    `• USDC (BEP-20): 0.00`
+    `• USDT (ERC-20): ${b.erc20Usdt.toFixed(2)}\n` +
+    `• USDC (ERC-20): ${b.erc20Usdc.toFixed(2)}\n` +
+    `• USDT (BEP-20): ${b.bep20Usdt.toFixed(2)}\n` +
+    `• USDC (BEP-20): ${b.bep20Usdc.toFixed(2)}`
   );
 }
 
-export function buildCreateWalletResultText(address: string, privateKey: string): string {
+export function buildCreateWalletResultText(address: string, privateKey: string, balances?: WalletBalances): string {
+  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
+
   return (
     `💼 <b>Wallet Created</b>\n\n` +
     `Account: <code>${address}</code>\n` +
     `PK: <code>${privateKey}</code>\n\n` +
-    `ERC-20 bal.: USDT 0.00, USDC 0.00\n` +
-    `BEP-20 bal.: USDT 0.00, USDC 0.00\n\n` +
+    `ERC-20 bal.: USDT ${b.erc20Usdt.toFixed(2)}, USDC ${b.erc20Usdc.toFixed(2)}\n` +
+    `BEP-20 bal.: USDT ${b.bep20Usdt.toFixed(2)}, USDC ${b.bep20Usdc.toFixed(2)}\n\n` +
     `Select network to use as trade account:`
   );
 }
