@@ -1,7 +1,8 @@
-import { Context, Telegraf } from 'telegraf';
+import { Context, Markup, Telegraf } from 'telegraf';
+import { ethers } from 'ethers';
 import { getUser, setUserStep, updateAccountMode, updateUserLastTrade } from '../../db/repositories/users';
 import { getUserPositions } from '../../db/repositories/positions';
-import { createWallet, getWallet, isValidPrivateKey, deriveAddress } from '../../db/repositories/wallets';
+import { createWallet, getWallet, isValidPrivateKey, deriveAddress, verifyWalletPin } from '../../db/repositories/wallets';
 import {
   executeMultipleTrades,
   closePosition,
@@ -13,34 +14,41 @@ import {
   addPromptMessage,
   clearSession,
   getLimitDuration,
+  getPendingPin,
   getTradeMode,
   setLimitDuration,
+  setPendingPin,
   takePromptMessageIds,
 } from '../session';
 import { parseAmount, parseDuration } from '../../utils/parse';
 import {
   AI_SCANNING_TEXT,
+  IMPORT_WALLET_PROMPT,
+  INVALID_PIN_TEXT,
+  PIN_PROMPT,
   PROMPT_LIMIT_AMOUNT,
   buildActivePositionText,
   buildActivityListText,
   buildActivityText,
   buildClosedPositionText,
+  buildCreateWalletResultText,
   buildDashboardText,
   buildImportWalletResultText,
   buildRealDashboardText,
   buildStatsText,
+  buildWalletStatusText,
 } from '../messages';
 import {
   activityKeyboard,
   activityListKeyboard,
   backKeyboard,
-  createWalletKeyboard,
   importWalletResultKeyboard,
   mainDashboardKeyboard,
   modeSelectKeyboard,
   positionKeyboard,
   realDashboardKeyboard,
   statsKeyboard,
+  walletStatusKeyboard,
 } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
 import { getWalletBalances } from '../../services/balanceService';
@@ -251,7 +259,87 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
         break;
       }
 
+      case 'awaiting_create_wallet_pin': {
+        if (!/^\d{4}$/.test(text)) {
+          await ctx.reply(INVALID_PIN_TEXT, { parse_mode: 'HTML' });
+          return;
+        }
+
+        await deletePromptMessages(ctx, chatId);
+        await setUserStep(chatId, null);
+
+        const randomWallet = ethers.Wallet.createRandom();
+        const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20', text);
+
+        const balances = await getWalletBalances(wallet.address);
+        const resultText = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
+
+        await ctx.reply(resultText, {
+          parse_mode: 'HTML',
+          ...importWalletResultKeyboard(),
+        });
+        break;
+      }
+
+      case 'awaiting_import_wallet_pin': {
+        if (!/^\d{4}$/.test(text)) {
+          await ctx.reply(INVALID_PIN_TEXT, { parse_mode: 'HTML' });
+          return;
+        }
+
+        setPendingPin(chatId, text);
+        await setUserStep(chatId, 'awaiting_wallet_pk');
+
+        await deletePromptMessages(ctx, chatId);
+
+        const msg = await ctx.reply(IMPORT_WALLET_PROMPT, {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('⬅️ Back', 'import_wallet_back')],
+          ]),
+        });
+        addPromptMessage(chatId, msg.message_id);
+        break;
+      }
+
+      case 'awaiting_wallet_status_pin': {
+        if (!/^\d{4}$/.test(text)) {
+          await ctx.reply(INVALID_PIN_TEXT, { parse_mode: 'HTML' });
+          return;
+        }
+
+        const valid = await verifyWalletPin(chatId, text);
+        if (!valid) {
+          await ctx.reply('❌ Incorrect PIN. Try again:', { parse_mode: 'HTML' });
+          return;
+        }
+
+        await deletePromptMessages(ctx, chatId);
+        await setUserStep(chatId, null);
+
+        const wallet = await getWallet(chatId);
+        if (!wallet) {
+          await ctx.reply('Wallet not found.');
+          return;
+        }
+
+        const [balances, positions] = await Promise.all([
+          getWalletBalances(wallet.address),
+          getUserPositions(chatId),
+        ]);
+
+        const statusText = buildWalletStatusText(wallet, balances, positions.length);
+
+        await ctx.reply(statusText, {
+          parse_mode: 'HTML',
+          ...walletStatusKeyboard(),
+        });
+        break;
+      }
+
       case 'awaiting_wallet_pk': {
+        const pendingPin = getPendingPin(chatId);
+
         await deletePromptMessages(ctx, chatId);
         await setUserStep(chatId, null);
 
@@ -267,7 +355,8 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
         const cleaned = text.startsWith('0x') ? text : '0x' + text;
         const address = deriveAddress(cleaned);
 
-        await createWallet(chatId, cleaned, 'ERC20');
+        await createWallet(chatId, cleaned, 'ERC20', pendingPin ?? '');
+        clearSession(chatId);
 
         const balances = await getWalletBalances(address);
         const resultText = buildImportWalletResultText(address, balances);

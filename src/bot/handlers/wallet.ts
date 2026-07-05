@@ -1,27 +1,26 @@
 import { Context, Markup, Telegraf } from 'telegraf';
-import { ethers } from 'ethers';
 import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
-import { getWallet, createWallet, deleteWallet, updateWalletNetwork } from '../../db/repositories/wallets';
-import { getUserPositions } from '../../db/repositories/positions';
+import { getWallet, deleteWallet, updateWalletNetwork } from '../../db/repositories/wallets';
 import {
   addPromptMessage,
   clearSession,
-  takePromptMessageIds,
 } from '../session';
 import {
-  IMPORT_WALLET_PROMPT,
+  PIN_PROMPT,
   WALLET_DELETED_TEXT,
-  buildCreateWalletResultText,
   buildRealDashboardText,
-  buildWalletStatusText,
 } from '../messages';
 import {
   importWalletResultKeyboard,
   realDashboardKeyboard,
-  walletStatusKeyboard,
 } from '../keyboards';
 import { getWalletBalances } from '../../services/balanceService';
 import type { AccountMode, WalletNetwork } from '../../types';
+
+const pinBackKeyboard = (backAction: string) =>
+  Markup.inlineKeyboard([
+  [Markup.button.callback('⬅️ Back', backAction)],
+]);
 
 async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
   const user = await getUser(chatId);
@@ -54,17 +53,21 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
-    const randomWallet = ethers.Wallet.createRandom();
-    const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20');
-
-    const balances = await getWalletBalances(wallet.address);
-    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
+    clearSession(chatId);
+    await setUserStep(chatId, 'awaiting_create_wallet_pin');
 
     if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
+      await ctx.editMessageText(PIN_PROMPT, {
         parse_mode: 'HTML',
-        ...importWalletResultKeyboard(),
+        ...pinBackKeyboard('import_wallet_back'),
       });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(PIN_PROMPT, {
+        parse_mode: 'HTML',
+        ...pinBackKeyboard('import_wallet_back'),
+      });
+      addPromptMessage(chatId, msg.message_id);
     }
   });
 
@@ -80,23 +83,18 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     }
 
     clearSession(chatId);
-    await setUserStep(chatId, 'awaiting_wallet_pk');
-
-    const walletBackKeyboard = () =>
-      Markup.inlineKeyboard([
-      [Markup.button.callback('⬅️ Back', 'import_wallet_back')],
-    ]);
+    await setUserStep(chatId, 'awaiting_import_wallet_pin');
 
     if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(IMPORT_WALLET_PROMPT, {
+      await ctx.editMessageText(PIN_PROMPT, {
         parse_mode: 'HTML',
-        ...walletBackKeyboard(),
+        ...pinBackKeyboard('import_wallet_back'),
       });
       addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
     } else {
-      const msg = await ctx.reply(IMPORT_WALLET_PROMPT, {
+      const msg = await ctx.reply(PIN_PROMPT, {
         parse_mode: 'HTML',
-        ...walletBackKeyboard(),
+        ...pinBackKeyboard('import_wallet_back'),
       });
       addPromptMessage(chatId, msg.message_id);
     }
@@ -132,24 +130,23 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
-    const [balances, positions] = await Promise.all([
-      getWalletBalances(wallet.address),
-      getUserPositions(chatId),
-    ]);
-
-    const text = buildWalletStatusText(wallet, balances, positions.length);
+    clearSession(chatId);
+    await setUserStep(chatId, 'awaiting_wallet_status_pin');
 
     if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
+      await ctx.editMessageText(PIN_PROMPT, {
         parse_mode: 'HTML',
-        ...walletStatusKeyboard(),
+        ...pinBackKeyboard('wallet_status_back'),
       });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
     }
   });
 
   bot.action('wallet_status_back', async (ctx) => {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
+    clearSession(chatId);
+    await setUserStep(chatId, null);
     await showRealDashboard(ctx, chatId);
   });
 
@@ -171,50 +168,6 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
         ...modeSelectKeyboard(),
       });
     }
-  });
-
-  bot.action('create_wallet_erc20', async (ctx) => {
-    await ctx.answerCbQuery();
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    const randomWallet = ethers.Wallet.createRandom();
-    const wallet = await createWallet(chatId, randomWallet.privateKey, 'ERC20');
-    await setUserStep(chatId, null);
-
-    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...importWalletResultKeyboard(),
-      });
-    }
-  });
-
-  bot.action('create_wallet_bep20', async (ctx) => {
-    await ctx.answerCbQuery();
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    const randomWallet = ethers.Wallet.createRandom();
-    const wallet = await createWallet(chatId, randomWallet.privateKey, 'BEP20');
-    await setUserStep(chatId, null);
-
-    const text = buildCreateWalletResultText(wallet.address, wallet.privateKey);
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...importWalletResultKeyboard(),
-      });
-    }
-  });
-
-  bot.action('create_wallet_back', async (ctx) => {
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-    await showRealDashboard(ctx, chatId);
   });
 
   bot.action('import_wallet_erc20', async (ctx) => {
@@ -278,6 +231,8 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
   bot.action('import_wallet_back', async (ctx) => {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
+    clearSession(chatId);
+    await setUserStep(chatId, null);
     await showRealDashboard(ctx, chatId);
   });
 }

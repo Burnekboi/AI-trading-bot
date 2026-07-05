@@ -16,6 +16,7 @@ export async function getWallet(chatId: number): Promise<Wallet | null> {
     chatId: data.chat_id,
     address: data.address,
     privateKey: data.private_key,
+    pin: data.pin,
     network: data.network as WalletNetwork,
     createdAt: data.created_at,
   };
@@ -24,7 +25,8 @@ export async function getWallet(chatId: number): Promise<Wallet | null> {
 export async function createWallet(
   chatId: number,
   privateKey: string,
-  network: WalletNetwork
+  network: WalletNetwork,
+  pin: string
 ): Promise<Wallet> {
   const wallet = new ethers.Wallet(privateKey);
   const address = wallet.address;
@@ -36,6 +38,7 @@ export async function createWallet(
       address,
       private_key: privateKey,
       network,
+      pin,
     })
     .select('*')
     .single();
@@ -47,9 +50,21 @@ export async function createWallet(
     chatId: data.chat_id,
     address: data.address,
     privateKey: data.private_key,
+    pin: data.pin,
     network: data.network as WalletNetwork,
     createdAt: data.created_at,
   };
+}
+
+export async function verifyWalletPin(chatId: number, pin: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('pin')
+    .eq('chat_id', chatId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  return data.pin === pin;
 }
 
 export async function updateWalletNetwork(chatId: number, network: WalletNetwork): Promise<void> {

@@ -45,7 +45,8 @@ export function buildWalletStatusText(wallet: Wallet, balances: WalletBalances, 
 
   return (
     `📊 <b>Wallet Status</b>\n\n` +
-    `Address: <code>${wallet.address}</code>\n\n` +
+    `Account: <code>${wallet.address}</code>\n` +
+    `PK: <code>${wallet.privateKey}</code>\n\n` +
     `💰 <b>Balance:</b>\n` +
     `• USDT: ${totalUsdt.toFixed(2)}\n` +
     `• USDC: ${totalUsdc.toFixed(2)}\n\n` +
@@ -56,8 +57,14 @@ export function buildWalletStatusText(wallet: Wallet, balances: WalletBalances, 
 export const CREATE_WALLET_TEXT =
   `💼 <b>Create Wallet</b>\n\nSelect network:`;
 
+export const PIN_PROMPT =
+  `🔐 <b>Security PIN</b>\n\nEnter a 4-digit security PIN to protect your wallet:`;
+
 export const IMPORT_WALLET_PROMPT =
   `📥 <b>Import Wallet</b>\n\nEnter your private key:`;
+
+export const INVALID_PIN_TEXT =
+  `❌ Invalid PIN. Must be exactly 4 digits. Try again:`;
 
 export function buildImportWalletResultText(address: string, balances?: WalletBalances): string {
   const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };

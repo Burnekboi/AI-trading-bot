@@ -2,6 +2,7 @@ interface PendingSession {
   promptMessageIds: number[];
   limitDurationMs?: number;
   tradeMode?: 'market' | 'limit';
+  pendingPin?: string;
 }
 
 const sessions = new Map<number, PendingSession>();
@@ -35,6 +36,14 @@ export function getLimitDuration(chatId: number): number | undefined {
 
 export function getTradeMode(chatId: number): 'market' | 'limit' | undefined {
   return getSession(chatId).tradeMode;
+}
+
+export function setPendingPin(chatId: number, pin: string): void {
+  getSession(chatId).pendingPin = pin;
+}
+
+export function getPendingPin(chatId: number): string | undefined {
+  return getSession(chatId).pendingPin;
 }
 
 export function clearSession(chatId: number): void {

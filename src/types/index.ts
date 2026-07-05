@@ -6,6 +6,9 @@ export type UserStep =
   | 'awaiting_limit_amount'
   | 'awaiting_pair_count'
   | 'awaiting_wallet_pk'
+  | 'awaiting_create_wallet_pin'
+  | 'awaiting_import_wallet_pin'
+  | 'awaiting_wallet_status_pin'
   | null;
 
 export type TradeMode = 'market' | 'limit';
@@ -88,6 +91,7 @@ export interface Wallet {
   chatId: number;
   address: string;
   privateKey: string;
+  pin: string;
   network: 'ERC20' | 'BEP20';
   createdAt?: number;
 }
