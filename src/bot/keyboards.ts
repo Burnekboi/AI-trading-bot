@@ -34,18 +34,24 @@ export const realDashboardKeyboard = (hasWallet: boolean) =>
   Markup.inlineKeyboard([
   ...(hasWallet ? [
     [
-      Markup.button.callback('📥 Import Wallet', 'real_import_wallet'),
-      Markup.button.callback('🗑 Delete Wallet', 'real_delete_wallet'),
+      Markup.button.callback('🚀 START TRADING', 'start_trading_real'),
+      Markup.button.callback('📊 WALLET STATUS', 'wallet_status'),
     ],
   ] : [
     [
       Markup.button.callback('💼 Create Wallet', 'real_create_wallet'),
       Markup.button.callback('📥 Import Wallet', 'real_import_wallet'),
     ],
+    [
+      Markup.button.callback('⬅️ Back', 'real_back'),
+    ],
   ]),
-  [
-    Markup.button.callback('⬅️ Back', 'real_back'),
-  ],
+]);
+
+export const walletStatusKeyboard = () =>
+  Markup.inlineKeyboard([
+  [Markup.button.callback('🗑 DELETE WALLET', 'real_delete_wallet')],
+  [Markup.button.callback('⬅️ Back', 'wallet_status_back')],
 ]);
 
 export const createWalletKeyboard = () =>

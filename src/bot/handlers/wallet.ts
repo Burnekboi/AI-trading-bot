@@ -2,6 +2,7 @@ import { Context, Markup, Telegraf } from 'telegraf';
 import { ethers } from 'ethers';
 import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
 import { getWallet, createWallet, deleteWallet, updateWalletNetwork } from '../../db/repositories/wallets';
+import { getUserPositions } from '../../db/repositories/positions';
 import {
   addPromptMessage,
   clearSession,
@@ -12,10 +13,12 @@ import {
   WALLET_DELETED_TEXT,
   buildCreateWalletResultText,
   buildRealDashboardText,
+  buildWalletStatusText,
 } from '../messages';
 import {
   importWalletResultKeyboard,
   realDashboardKeyboard,
+  walletStatusKeyboard,
 } from '../keyboards';
 import { getWalletBalances } from '../../services/balanceService';
 import type { AccountMode, WalletNetwork } from '../../types';
@@ -24,8 +27,7 @@ async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
   const user = await getUser(chatId);
   if (!user) return;
   const wallet = await getWallet(chatId);
-  const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-  const text = buildRealDashboardText(wallet, balances);
+  const text = buildRealDashboardText(wallet);
 
   if (ctx.callbackQuery?.message) {
     await ctx.editMessageText(text, {
@@ -113,6 +115,42 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
         ...realDashboardKeyboard(false),
       });
     }
+  });
+
+  bot.action('start_trading_real', async (ctx) => {
+    await ctx.answerCbQuery('🚀 Real trading coming soon!');
+  });
+
+  bot.action('wallet_status', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+      await showRealDashboard(ctx, chatId);
+      return;
+    }
+
+    const [balances, positions] = await Promise.all([
+      getWalletBalances(wallet.address),
+      getUserPositions(chatId),
+    ]);
+
+    const text = buildWalletStatusText(wallet, balances, positions.length);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...walletStatusKeyboard(),
+      });
+    }
+  });
+
+  bot.action('wallet_status_back', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    await showRealDashboard(ctx, chatId);
   });
 
   bot.action('real_back', async (ctx) => {

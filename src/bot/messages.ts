@@ -22,7 +22,7 @@ export function buildDashboardText(
   );
 }
 
-export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletBalances): string {
+export function buildRealDashboardText(wallet: Wallet | null): string {
   if (!wallet) {
     return (
       `🤖 <b>AI Trading Bot</b>\n` +
@@ -31,17 +31,25 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     );
   }
 
-  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
-
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
     `🎮 Mode: 💵 REAL MONEY\n` +
     `Address: <code>${wallet.address}</code>\n\n` +
-    `💰 <b>Balances:</b>\n` +
-    `• USDT (ERC-20): ${b.erc20Usdt.toFixed(2)}\n` +
-    `• USDC (ERC-20): ${b.erc20Usdc.toFixed(2)}\n` +
-    `• USDT (BEP-20): ${b.bep20Usdt.toFixed(2)}\n` +
-    `• USDC (BEP-20): ${b.bep20Usdc.toFixed(2)}`
+    `Select an option:`
+  );
+}
+
+export function buildWalletStatusText(wallet: Wallet, balances: WalletBalances, activeTrades: number): string {
+  const totalUsdt = balances.erc20Usdt + balances.bep20Usdt;
+  const totalUsdc = balances.erc20Usdc + balances.bep20Usdc;
+
+  return (
+    `📊 <b>Wallet Status</b>\n\n` +
+    `Address: <code>${wallet.address}</code>\n\n` +
+    `💰 <b>Balance:</b>\n` +
+    `• USDT: ${totalUsdt.toFixed(2)}\n` +
+    `• USDC: ${totalUsdc.toFixed(2)}\n\n` +
+    `🟢 Active Trades: ${activeTrades}`
   );
 }
 
