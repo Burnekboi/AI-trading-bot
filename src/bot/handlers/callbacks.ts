@@ -680,7 +680,7 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
     clearSession(chatId);
     await setUserStep(chatId, null);
 
-    if (pendingMode === 'real') {
+    if (pendingMode === 'real' || user.accountMode === 'real') {
       const wallet = await getWallet(chatId);
       const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
       const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;

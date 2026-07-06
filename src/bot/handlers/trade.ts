@@ -28,12 +28,24 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
       return;
     }
 
+    if (!wallet.apiWalletPrivateKey) {
+      await ctx.reply(
+        '⚠️ <b>API wallet not set up.</b>\n\n' +
+        'Go to <b>Wallet Status → [SET UP API WALLET]</b>\n' +
+        '(costs ~$0.01 USDC on Hyperliquid).\n\n' +
+        'This creates a separate API wallet for trading while keeping your main wallet safe.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
     const available = await getUserUsdcBalance(wallet.address);
 
     if (available < 10) {
       await ctx.reply(
         `❌ Minimum 10 USDC Hyperliquid balance required. Current: ${available.toFixed(2)} USDC.\n\n` +
-        `Deposit USDC to Hyperliquid via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>`,
+        `Deposit USDC to Hyperliquid via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
+        `📖 Check the GUIDE button in the dashboard for step-by-step deposit instructions.`,
         { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
       );
       return;
