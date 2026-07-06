@@ -9,6 +9,9 @@ export type UserStep =
   | 'awaiting_create_wallet_pin'
   | 'awaiting_import_wallet_pin'
   | 'awaiting_wallet_status_pin'
+  | 'awaiting_view_main_wallet_pin'
+  | 'awaiting_real_trade_amount'
+  | 'awaiting_real_pair_count'
   | null;
 
 export type TradeMode = 'market' | 'limit';
@@ -39,6 +42,8 @@ export interface ActivePosition {
   strategyName: string;
   timerExpiresAt: number | null;
   partialTpHit: boolean;
+  accountMode?: AccountMode;
+
 }
 
 export interface PerformanceRecord {
@@ -93,6 +98,9 @@ export interface Wallet {
   privateKey: string;
   pin: string;
   network: 'ERC20' | 'BEP20';
+  apiWalletAddress?: string;
+  apiWalletPrivateKey?: string;
+  masterAddress?: string;
   createdAt?: number;
 }
 

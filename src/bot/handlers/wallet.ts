@@ -1,6 +1,6 @@
 import { Context, Markup, Telegraf } from 'telegraf';
 import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
-import { getWallet, deleteWallet, updateWalletNetwork } from '../../db/repositories/wallets';
+import { getWallet, deleteWallet, updateWalletNetwork, updateApiWallet } from '../../db/repositories/wallets';
 import {
   addPromptMessage,
   clearSession,
@@ -9,12 +9,16 @@ import {
   PIN_PROMPT,
   WALLET_DELETED_TEXT,
   buildRealDashboardText,
+  buildApiWalletStatusText,
+  buildApiWalletSetupResultText,
 } from '../messages';
 import {
   importWalletResultKeyboard,
   realDashboardKeyboard,
+  walletStatusKeyboard,
 } from '../keyboards';
 import { getWalletBalances } from '../../services/balanceService';
+import { getUserUsdcBalance, generateAndApproveAgent } from '../../services/hyperliquidService';
 import type { AccountMode, WalletNetwork } from '../../types';
 
 const pinBackKeyboard = (backAction: string) =>
@@ -22,20 +26,24 @@ const pinBackKeyboard = (backAction: string) =>
   [Markup.button.callback('⬅️ Back', backAction)],
 ]);
 
-async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
+export async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
   const user = await getUser(chatId);
   if (!user) return;
   const wallet = await getWallet(chatId);
-  const text = buildRealDashboardText(wallet);
+  const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+  const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+  const text = buildRealDashboardText(wallet, balances, hlBalance);
 
   if (ctx.callbackQuery?.message) {
     await ctx.editMessageText(text, {
       parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
       ...realDashboardKeyboard(wallet !== null),
     }).catch(() => {});
   } else {
     await ctx.reply(text, {
       parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
       ...realDashboardKeyboard(wallet !== null),
     });
   }
@@ -116,7 +124,12 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
   });
 
   bot.action('start_trading_real', async (ctx) => {
-    await ctx.answerCbQuery('🚀 Real trading coming soon!');
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const { startTradeFlow } = await import('./trade');
+    await startTradeFlow(ctx, chatId, 'real');
   });
 
   bot.action('wallet_status', async (ctx) => {
@@ -131,7 +144,31 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     }
 
     clearSession(chatId);
-    await setUserStep(chatId, 'awaiting_wallet_status_pin');
+    await setUserStep(chatId, null);
+
+    const text = buildApiWalletStatusText(wallet);
+    const hasApi = !!wallet.apiWalletPrivateKey;
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...walletStatusKeyboard(hasApi),
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...walletStatusKeyboard(hasApi),
+      });
+    }
+  });
+
+  bot.action('view_main_wallet', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    clearSession(chatId);
+    await setUserStep(chatId, 'awaiting_view_main_wallet_pin');
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(PIN_PROMPT, {
@@ -139,6 +176,72 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
         ...pinBackKeyboard('wallet_status_back'),
       });
       addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    }
+  });
+
+  bot.action('back_to_wallet_status', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+      await showRealDashboard(ctx, chatId);
+      return;
+    }
+
+    const text = buildApiWalletStatusText(wallet);
+    const hasApi = !!wallet.apiWalletPrivateKey;
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...walletStatusKeyboard(hasApi),
+      });
+    }
+  });
+
+  bot.action('setup_api_wallet', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+      await showRealDashboard(ctx, chatId);
+      return;
+    }
+
+    if (wallet.apiWalletPrivateKey) {
+      await ctx.reply('API wallet is already configured.');
+      return;
+    }
+
+    try {
+      await ctx.editMessageText('⏳ Generating and approving API wallet on Hyperliquid...');
+
+      const result = await generateAndApproveAgent(wallet.privateKey);
+
+      await updateApiWallet(chatId, result.apiAddress, result.apiPrivateKey);
+
+      const text = buildApiWalletSetupResultText(result.apiAddress, result.apiPrivateKey);
+
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...walletStatusKeyboard(true),
+        });
+      } else {
+        await ctx.reply(text, {
+          parse_mode: 'HTML',
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Setup API Wallet Error]', error);
+      await ctx.editMessageText(`❌ API wallet setup failed: ${message}`, {
+        parse_mode: 'HTML',
+      });
     }
   });
 

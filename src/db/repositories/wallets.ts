@@ -18,8 +18,27 @@ export async function getWallet(chatId: number): Promise<Wallet | null> {
     privateKey: data.private_key,
     pin: data.pin,
     network: data.network as WalletNetwork,
+    apiWalletAddress: data.api_wallet_address ?? undefined,
+    apiWalletPrivateKey: data.api_wallet_private_key ?? undefined,
+    masterAddress: data.master_address ?? undefined,
     createdAt: data.created_at,
   };
+}
+
+export async function updateApiWallet(
+  chatId: number,
+  apiWalletAddress: string,
+  apiWalletPrivateKey: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('wallets')
+    .update({
+      api_wallet_address: apiWalletAddress,
+      api_wallet_private_key: apiWalletPrivateKey,
+    })
+    .eq('chat_id', chatId);
+
+  if (error) throw error;
 }
 
 export async function createWallet(

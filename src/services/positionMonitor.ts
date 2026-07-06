@@ -30,6 +30,8 @@ export function startPositionMonitor(bot: Telegraf): void {
     const positions = await getAllActivePositions();
 
     for (const position of positions) {
+      if (position.accountMode === 'real') continue; // MEXC handles TP/SL/liquidation
+
       try {
         const now = Date.now();
         const currentPrice = await getCurrentPrice(position.symbol);

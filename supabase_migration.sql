@@ -59,6 +59,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS account_mode TEXT NOT NULL DEFAULT 's
 -- Wallet security PIN
 ALTER TABLE wallets ADD COLUMN IF NOT EXISTS pin TEXT NOT NULL DEFAULT '';
 
+-- Real money trading: track account mode on positions
+ALTER TABLE active_positions ADD COLUMN IF NOT EXISTS account_mode TEXT NOT NULL DEFAULT 'simulation' CHECK(account_mode IN ('simulation', 'real'));
+
 -- Wallets (one per user)
 CREATE TABLE IF NOT EXISTS wallets (
   id BIGSERIAL PRIMARY KEY,
@@ -67,5 +70,8 @@ CREATE TABLE IF NOT EXISTS wallets (
   private_key TEXT NOT NULL,
   pin TEXT NOT NULL,
   network TEXT NOT NULL DEFAULT 'ERC20' CHECK(network IN ('ERC20', 'BEP20')),
+  api_wallet_address TEXT,
+  api_wallet_private_key TEXT,
+  master_address TEXT,
   created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );

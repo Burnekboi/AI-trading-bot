@@ -1,9 +1,12 @@
 import { Context, Telegraf } from 'telegraf';
-import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
+import { getUser, setUserStep } from '../../db/repositories/users';
 import { getUserPositions } from '../../db/repositories/positions';
+import { getWallet } from '../../db/repositories/wallets';
 import {
   addPromptMessage,
   clearSession,
+  getPendingAccountMode,
+  setPendingAccountMode,
   setTradeMode,
 } from '../session';
 import {
@@ -11,26 +14,32 @@ import {
   promptTradeAmount,
 } from '../messages';
 import { backKeyboard } from '../keyboards';
+import { getUserUsdcBalance } from '../../services/hyperliquidService';
 
-export function registerTradeHandlers(bot: Telegraf<Context>): void {
-  bot.action('trade_market', async (ctx) => {
-    await ctx.answerCbQuery();
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
+export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 'simulation' | 'real'): Promise<void> {
+  clearSession(chatId);
+  setPendingAccountMode(chatId, accountMode);
+  setTradeMode(chatId, 'market');
 
-    const user = await getUser(chatId);
-    if (!user) {
-      await ctx.reply('Please send /start to initialize your account.');
+  if (accountMode === 'real') {
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+      await ctx.reply('No wallet found. Create or import one first.');
       return;
     }
 
-    const positions = await getUserPositions(chatId);
-    const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
-    const available = user.usdtBalance - allocated;
+    const available = await getUserUsdcBalance(wallet.address);
 
-    clearSession(chatId);
-    setTradeMode(chatId, 'market');
-    await setUserStep(chatId, 'awaiting_trade_amount');
+    if (available < 10) {
+      await ctx.reply(
+        `❌ Minimum 10 USDC Hyperliquid balance required. Current: ${available.toFixed(2)} USDC.\n\n` +
+        `Deposit USDC to Hyperliquid via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+      return;
+    }
+
+    await setUserStep(chatId, 'awaiting_real_trade_amount');
 
     const text = promptTradeAmount(available);
 
@@ -47,8 +56,34 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
       });
       addPromptMessage(chatId, msg.message_id);
     }
-  });
+  } else {
+    await setUserStep(chatId, 'awaiting_trade_amount');
+    const user = await getUser(chatId);
+    if (!user) return;
 
+    const positions = await getUserPositions(chatId);
+    const allocated = positions.filter(p => p.accountMode !== 'real').reduce((s, p) => s + p.allocatedAmount, 0);
+    const available = user.usdtBalance - allocated;
+
+    const text = promptTradeAmount(available);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    }
+  }
+}
+
+export function registerTradeHandlers(bot: Telegraf<Context>): void {
   bot.action('simulation_trade', async (ctx) => {
     await ctx.answerCbQuery();
     const chatId = ctx.chat?.id;
@@ -60,32 +95,16 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
-    await updateAccountMode(chatId, 'simulation');
-    user.accountMode = 'simulation';
+    await startTradeFlow(ctx, chatId, 'simulation');
+  });
 
-    const positions = await getUserPositions(chatId);
-    const allocated = positions.reduce((s, p) => s + p.allocatedAmount, 0);
-    const available = user.usdtBalance - allocated;
+  bot.action('trade_market', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
 
-    clearSession(chatId);
-    setTradeMode(chatId, 'market');
-    await setUserStep(chatId, 'awaiting_trade_amount');
-
-    const text = promptTradeAmount(available);
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
-    } else {
-      const msg = await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, msg.message_id);
-    }
+    const mode = getPendingAccountMode(chatId) ?? 'simulation';
+    await startTradeFlow(ctx, chatId, mode);
   });
 
   bot.action('trade_limit', async (ctx) => {
@@ -93,12 +112,7 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    if (!(await getUser(chatId))) {
-      await ctx.reply('Please send /start to initialize your account.');
-      return;
-    }
-
-    clearSession(chatId);
+    await clearSession(chatId);
     setTradeMode(chatId, 'limit');
     await setUserStep(chatId, 'awaiting_limit_duration');
 

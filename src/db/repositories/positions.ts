@@ -1,5 +1,5 @@
 import { supabase } from '../database';
-import type { ActivePosition, TradeDirection } from '../../types';
+import type { AccountMode, ActivePosition, TradeDirection } from '../../types';
 
 function rowToPosition(row: {
   id: number;
@@ -15,6 +15,7 @@ function rowToPosition(row: {
   strategy_name: string;
   timer_expires_at: number | null;
   partial_tp_hit: boolean;
+  account_mode?: string;
 }): ActivePosition {
   return {
     id: row.id,
@@ -30,6 +31,7 @@ function rowToPosition(row: {
     strategyName: row.strategy_name,
     timerExpiresAt: row.timer_expires_at,
     partialTpHit: row.partial_tp_hit,
+    accountMode: (row.account_mode as AccountMode) ?? 'simulation',
   };
 }
 
@@ -76,22 +78,25 @@ export async function getAllActivePositions(): Promise<ActivePosition[]> {
 }
 
 export async function createPosition(position: ActivePosition): Promise<number> {
+  const insert: Record<string, any> = {
+    chat_id: position.chatId,
+    message_id: position.messageId,
+    symbol: position.symbol,
+    direction: position.direction,
+    allocated_amount: position.allocatedAmount,
+    entry_price: position.entryPrice,
+    stop_loss: position.stopLoss,
+    target_profit: position.targetProfit,
+    leverage: position.leverage,
+    strategy_name: position.strategyName,
+    timer_expires_at: position.timerExpiresAt,
+    partial_tp_hit: position.partialTpHit,
+    account_mode: position.accountMode ?? 'simulation',
+  };
+
   const { data, error } = await supabase
     .from('active_positions')
-    .insert({
-      chat_id: position.chatId,
-      message_id: position.messageId,
-      symbol: position.symbol,
-      direction: position.direction,
-      allocated_amount: position.allocatedAmount,
-      entry_price: position.entryPrice,
-      stop_loss: position.stopLoss,
-      target_profit: position.targetProfit,
-      leverage: position.leverage,
-      strategy_name: position.strategyName,
-      timer_expires_at: position.timerExpiresAt,
-      partial_tp_hit: position.partialTpHit,
-    })
+    .insert(insert)
     .select('id')
     .single();
 

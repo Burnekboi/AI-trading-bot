@@ -22,7 +22,7 @@ export function buildDashboardText(
   );
 }
 
-export function buildRealDashboardText(wallet: Wallet | null): string {
+export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletBalances, hlBalance?: number): string {
   if (!wallet) {
     return (
       `🤖 <b>AI Trading Bot</b>\n` +
@@ -31,26 +31,55 @@ export function buildRealDashboardText(wallet: Wallet | null): string {
     );
   }
 
+  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
+  const hl = hlBalance ?? 0;
+  const setupMsg = hl >= 10
+    ? `✅ Ready to trade`
+    : `⚠️  Deposit USDC to Hyperliquid to start trading.\n   Minimum 10 USDC required.`;
+
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
     `🎮 Mode: 💵 REAL MONEY\n` +
     `Address: <code>${wallet.address}</code>\n\n` +
-    `Select an option:`
+    `💰 <b>Balances:</b>\n` +
+    `• USDT (on-chain): <b>${(b.erc20Usdt + b.bep20Usdt).toFixed(2)}</b>\n` +
+    `• USDC (on-chain): <b>${(b.erc20Usdc + b.bep20Usdc).toFixed(2)}</b>\n` +
+    `• USDC (Hyperliquid): <b>${hl.toFixed(2)}</b>\n\n` +
+    `🔗 <a href="https://app.hyperliquid.xyz">Open Hyperliquid</a>\n` +
+    `${setupMsg}`
   );
 }
 
-export function buildWalletStatusText(wallet: Wallet, balances: WalletBalances, activeTrades: number): string {
+export function buildApiWalletStatusText(wallet: Wallet): string {
+  if (wallet.apiWalletAddress && wallet.apiWalletPrivateKey) {
+    return (
+      `📊 <b>API Wallet Status</b>\n\n` +
+      `🔑 <b>API Wallet</b>\n` +
+      `Address: <code>${wallet.apiWalletAddress}</code>\n` +
+      `Private Key: <code>${wallet.apiWalletPrivateKey}</code>\n\n` +
+      `ℹ️ This wallet can place and cancel orders only.\n` +
+      `Withdrawals require your main wallet signature.`
+    );
+  }
+
+  return (
+    `📊 <b>API Wallet Status</b>\n\n` +
+    `⚠️ No API wallet configured yet.\n` +
+    `Set up an API wallet to trade securely without exposing your main private key.`
+  );
+}
+
+export function buildMainWalletStatusText(wallet: Wallet, balances: WalletBalances): string {
   const totalUsdt = balances.erc20Usdt + balances.bep20Usdt;
   const totalUsdc = balances.erc20Usdc + balances.bep20Usdc;
 
   return (
-    `📊 <b>Wallet Status</b>\n\n` +
-    `Account: <code>${wallet.address}</code>\n` +
-    `PK: <code>${wallet.privateKey}</code>\n\n` +
+    `💰 <b>Main Wallet</b>\n\n` +
+    `Address: <code>${wallet.address}</code>\n` +
+    `Private Key: <code>${wallet.privateKey}</code>\n\n` +
     `💰 <b>Balance:</b>\n` +
     `• USDT: ${totalUsdt.toFixed(2)}\n` +
-    `• USDC: ${totalUsdc.toFixed(2)}\n\n` +
-    `🟢 Active Trades: ${activeTrades}`
+    `• USDC: ${totalUsdc.toFixed(2)}`
   );
 }
 
@@ -95,6 +124,17 @@ export function buildCreateWalletResultText(address: string, privateKey: string,
 
 export const WALLET_DELETED_TEXT =
   `🗑 <b>Wallet Deleted</b>\n\nYour wallet has been removed.`;
+
+export function buildApiWalletSetupResultText(apiAddress: string, apiPrivateKey: string): string {
+  return (
+    `🔐 <b>API Wallet Set Up Successfully</b>\n\n` +
+    `Address: <code>${apiAddress}</code>\n` +
+    `Private Key: <code>${apiPrivateKey}</code>\n\n` +
+    `✅ This wallet can place and cancel orders but <b>cannot withdraw funds</b>.\n\n` +
+    `ℹ️ All future trades will use this API wallet for enhanced security.\n` +
+    `Your main wallet private key is no longer needed for trading.`
+  );
+}
 
 export function buildWelcomeText(address: string): string {
   return (

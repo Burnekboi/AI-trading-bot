@@ -1,8 +1,11 @@
+import type { AccountMode } from '../types';
+
 interface PendingSession {
   promptMessageIds: number[];
   limitDurationMs?: number;
   tradeMode?: 'market' | 'limit';
   pendingPin?: string;
+  pendingAccountMode?: AccountMode;
 }
 
 const sessions = new Map<number, PendingSession>();
@@ -36,6 +39,14 @@ export function getLimitDuration(chatId: number): number | undefined {
 
 export function getTradeMode(chatId: number): 'market' | 'limit' | undefined {
   return getSession(chatId).tradeMode;
+}
+
+export function setPendingAccountMode(chatId: number, mode: AccountMode): void {
+  getSession(chatId).pendingAccountMode = mode;
+}
+
+export function getPendingAccountMode(chatId: number): AccountMode | undefined {
+  return getSession(chatId).pendingAccountMode;
 }
 
 export function setPendingPin(chatId: number, pin: string): void {
