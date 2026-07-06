@@ -53,9 +53,8 @@ export const realDashboardKeyboard = (hasWallet: boolean) =>
 
 export const walletStatusKeyboard = (hasApiWallet: boolean) =>
   Markup.inlineKeyboard([
-  ...(hasApiWallet ? [
-    [Markup.button.callback('👁 VIEW MAIN WALLET', 'view_main_wallet')],
-  ] : [
+  [Markup.button.callback('👁 VIEW MAIN WALLET', 'view_main_wallet')],
+  ...(hasApiWallet ? [] : [
     [Markup.button.callback('🔐 SET UP API WALLET', 'setup_api_wallet')],
   ]),
   [Markup.button.callback('🗑 DELETE WALLET', 'real_delete_wallet')],
