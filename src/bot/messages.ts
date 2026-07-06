@@ -35,7 +35,14 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
   const hl = hlBalance ?? 0;
   const setupMsg = hl >= 10
     ? `✅ Ready to trade`
-    : `⚠️  Deposit USDC to Hyperliquid to start trading.\n   Minimum 10 USDC required.`;
+    : `⚠️  No USDC on Hyperliquid yet.\n\n` +
+      `📋 <b>How to deposit (one-time, takes ~5 min):</b>\n` +
+      `1. Click "Open Hyperliquid" below\n` +
+      `2. Connect your wallet (MetaMask, OKX, etc.)\n` +
+      `3. Click "Deposit" in the top bar\n` +
+      `4. Enter USDC amount and confirm (Ethereum TX)\n` +
+      `5. Wait for confirmation, then come back here\n\n` +
+      `Minimum 10 USDC required to trade.`;
 
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
