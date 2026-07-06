@@ -37,6 +37,9 @@ export const realDashboardKeyboard = (hasWallet: boolean) =>
       Markup.button.callback('🚀 START TRADING', 'start_trading_real'),
       Markup.button.callback('📊 WALLET STATUS', 'wallet_status'),
     ],
+    [
+      Markup.button.callback('📖 GUIDE', 'real_money_guide'),
+    ],
   ] : [
     [
       Markup.button.callback('💼 Create Wallet', 'real_create_wallet'),

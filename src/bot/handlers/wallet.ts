@@ -11,8 +11,10 @@ import {
   buildRealDashboardText,
   buildApiWalletStatusText,
   buildApiWalletSetupResultText,
+  buildRealMoneyGuideText,
 } from '../messages';
 import {
+  backKeyboard,
   importWalletResultKeyboard,
   realDashboardKeyboard,
   walletStatusKeyboard,
@@ -262,6 +264,28 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     clearSession(chatId);
     await setUserStep(chatId, null);
     await showRealDashboard(ctx, chatId);
+  });
+
+  bot.action('real_money_guide', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const text = buildRealMoneyGuideText();
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...backKeyboard(),
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...backKeyboard(),
+      });
+    }
   });
 
   bot.action('real_back', async (ctx) => {

@@ -33,30 +33,6 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
 
   const onchainUsdc = (balances?.erc20Usdc ?? 0) + (balances?.bep20Usdc ?? 0);
   const hl = hlBalance ?? 0;
-  const setupMsg = hl >= 10
-    ? `✅ Ready to trade`
-    : hl > 0 && hl < 10
-    ? `⚠️  Minimum 10 USDC required. You have ${hl.toFixed(2)} USDC on HL.\n\n` +
-      `Deposit more, then click Wallet Status → [SET UP API WALLET].`
-    : `⚠️  No USDC on Hyperliquid yet.\n\n` +
-      `📋 <b>One-time setup (use Arbitrum, ~$0.01 gas):</b>\n\n` +
-      `<b>If you already have MetaMask with USDC on Arbitrum:</b>\n` +
-      `1. Click "Open Hyperliquid" below\n` +
-      `2. Connect MetaMask (Arbitrum network)\n` +
-      `3. Click Deposit → choose Arbitrum\n` +
-      `4. Enter amount → confirm (~$0.01 gas)\n\n` +
-      `<b>If you use Binance/CEX and created wallet in bot:</b>\n` +
-      `1. Buy USDC on Binance\n` +
-      `2. Withdraw USDC to your wallet address below\n` +
-      `   Network: <b>Arbitrum One</b>\n` +
-      `   Address: <code>${wallet.address}</code>\n` +
-      `3. Import that PK into MetaMask\n` +
-      `4. Connect to Hyperliquid → Deposit (Arbitrum)\n\n` +
-      `<b>After deposit arrives:</b>\n` +
-      `• Click Wallet Status → [SET UP API WALLET]\n` +
-      `  (costs ~$0.01 USDC on HL)\n` +
-      `• Then you can trade!\n\n` +
-      `Deposit at least 10-15 USDC.`;
 
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
@@ -65,8 +41,13 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     `💰 <b>Balances:</b>\n` +
     `• USDC (on-chain): <b>${onchainUsdc.toFixed(2)}</b>\n` +
     `• USDC (Hyperliquid): <b>${hl.toFixed(2)}</b>\n\n` +
-    `🔗 <a href="https://app.hyperliquid.xyz">Open Hyperliquid</a>\n` +
-    `${setupMsg}`
+    (hl >= 10
+      ? `✅ Ready to trade`
+      : hl > 0 && hl < 10
+        ? `⚠️  Need more USDC (min 10)`
+        : `⚠️  No USDC on Hyperliquid` +
+          `\n\n📖 Check the GUIDE button below for setup instructions.`
+    )
   );
 }
 
@@ -144,6 +125,49 @@ export function buildApiWalletSetupResultText(apiAddress: string, apiPrivateKey:
     `✅ This wallet can place and cancel orders but <b>cannot withdraw funds</b>.\n\n` +
     `ℹ️ All future trades will use this API wallet for enhanced security.\n` +
     `Your main wallet private key is no longer needed for trading.`
+  );
+}
+
+export function buildRealMoneyGuideText(): string {
+  return (
+    `📖 <b>Real Money Trading Guide</b>\n\n` +
+    `<b>What you need:</b>\n` +
+    `• A wallet (create or import one in the bot)\n` +
+    `• USDC on Arbitrum (buy on Binance or other CEX)\n` +
+    `• MetaMask (free browser extension)\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>Step 1 — Get USDC into your wallet</b>\n\n` +
+    `<b>If you CREATED a wallet in the bot:</b>\n` +
+    `1. Buy USDC on Binance/CEX\n` +
+    `2. Withdraw to your bot wallet address below\n` +
+    `   Network: <b>Arbitrum One</b> (gas ~$0.01)\n` +
+    `3. Import wallet PK into MetaMask:\n` +
+    `   Wallet Status → VIEW MAIN WALLET →\n` +
+    `   copy private key → import in MetaMask\n\n` +
+    `<b>If you IMPORTED an existing MetaMask wallet:</b>\n` +
+    `• Your wallet is already in MetaMask\n` +
+    `• Buy USDC on CEX → withdraw to your\n` +
+    `  MetaMask address on Arbitrum One\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>Step 2 — Deposit to Hyperliquid</b>\n\n` +
+    `1. Click the "Open Hyperliquid" link below\n` +
+    `2. Connect your MetaMask (Arbitrum network)\n` +
+    `3. Click Deposit → choose Arbitrum\n` +
+    `4. Enter 10-15 USDC → confirm (~$0.01 gas)\n` +
+    `5. Wait ~1 min for confirmation\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>Step 3 — Set up API Wallet</b>\n\n` +
+    `1. Go back to the bot dashboard\n` +
+    `2. Click Wallet Status\n` +
+    `3. Click [SET UP API WALLET]\n` +
+    `   (costs ~$0.01 USDC on HL)\n\n` +
+    `━━━━━━━━━━━━━━━━━━\n\n` +
+    `<b>Step 4 — Start Trading</b>\n\n` +
+    `• Click START TRADING → enter amount\n` +
+    `• AI scans Hyperliquid pairs, picks the best\n` +
+    `• Bot places the order on Hyperliquid DEX\n` +
+    `• Monitor your positions in the dashboard\n\n` +
+    `✅ Done!`
   );
 }
 
