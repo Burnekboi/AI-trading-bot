@@ -55,11 +55,21 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
 
     await setUserStep(chatId, 'awaiting_real_trade_amount');
 
-    const msg = await ctx.reply(promptTradeAmount(available), {
-      parse_mode: 'HTML',
-      ...backKeyboard(),
-    });
-    addPromptMessage(chatId, msg.message_id);
+    const text = promptTradeAmount(available);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    }
   } else {
     await setUserStep(chatId, 'awaiting_trade_amount');
     const user = await getUser(chatId);
@@ -69,11 +79,21 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
     const allocated = positions.filter(p => p.accountMode !== 'real').reduce((s, p) => s + p.allocatedAmount, 0);
     const available = user.usdtBalance - allocated;
 
-    const msg = await ctx.reply(promptTradeAmount(available), {
-      parse_mode: 'HTML',
-      ...backKeyboard(),
-    });
-    addPromptMessage(chatId, msg.message_id);
+    const text = promptTradeAmount(available);
+
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    }
   }
 }
 
@@ -112,10 +132,18 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     setTradeMode(chatId, 'limit');
     await setUserStep(chatId, 'awaiting_limit_duration');
 
-    const msg = await ctx.reply(PROMPT_LIMIT_DURATION, {
-      parse_mode: 'HTML',
-      ...backKeyboard(),
-    });
-    addPromptMessage(chatId, msg.message_id);
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(PROMPT_LIMIT_DURATION, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
+    } else {
+      const msg = await ctx.reply(PROMPT_LIMIT_DURATION, {
+        parse_mode: 'HTML',
+        ...backKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    }
   });
 }
