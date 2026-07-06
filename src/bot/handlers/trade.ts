@@ -13,7 +13,7 @@ import {
   PROMPT_LIMIT_DURATION,
   promptTradeAmount,
 } from '../messages';
-import { backKeyboard } from '../keyboards';
+import { backKeyboard, realDashboardKeyboard } from '../keyboards';
 import { getUserUsdcBalance } from '../../services/hyperliquidService';
 
 export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 'simulation' | 'real'): Promise<void> {
@@ -24,32 +24,41 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
   if (accountMode === 'real') {
     const wallet = await getWallet(chatId);
     if (!wallet) {
-      await ctx.reply('No wallet found. Create or import one first.');
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(
+          'No wallet found. Create or import one first.',
+          { ...realDashboardKeyboard(false) }
+        );
+      }
       return;
     }
 
     if (!wallet.apiWalletPrivateKey) {
-      await ctx.reply(
-        '⚠️ <b>Cannot trade real money yet.</b>\n\n' +
-        '• <b>Requirements:</b> 10+ USDC on Hyperliquid + an API wallet\n\n' +
-        'Go to <b>Wallet Status → [SET UP API WALLET]</b>\n' +
-        '(costs ~$0.01 USDC on Hyperliquid).\n\n' +
-        'This creates a separate API wallet for trading while keeping your main wallet safe.\n\n' +
-        '📖 Check the GUIDE button for deposit + setup walkthrough.',
-        { parse_mode: 'HTML' }
-      );
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(
+          '⚠️ <b>Cannot trade real money yet.</b>\n\n' +
+          '• <b>Requirements:</b> 10+ USDC on Hyperliquid + an API wallet\n\n' +
+          'Go to <b>Wallet Status → [SET UP API WALLET]</b>\n' +
+          '(costs ~$0.01 USDC on Hyperliquid).\n\n' +
+          'This creates a separate API wallet for trading while keeping your main wallet safe.\n\n' +
+          '📖 Check the GUIDE button for deposit + setup walkthrough.',
+          { parse_mode: 'HTML', ...realDashboardKeyboard(true) }
+        );
+      }
       return;
     }
 
     const available = await getUserUsdcBalance(wallet.address);
 
     if (available < 10) {
-      await ctx.reply(
-        `❌ Minimum <b>10 USDC</b> required. Current: <b>${available.toFixed(2)}</b> USDC.\n\n` +
-        `Deposit via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
-        `📖 Check the GUIDE button for step-by-step deposit instructions.`,
-        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
-      );
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(
+          `❌ Minimum <b>10 USDC</b> required. Current: <b>${available.toFixed(2)}</b> USDC.\n\n` +
+          `Deposit via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
+          `📖 Check the GUIDE button for step-by-step deposit instructions.`,
+          { parse_mode: 'HTML', link_preview_options: { is_disabled: true }, ...realDashboardKeyboard(true) }
+        );
+      }
       return;
     }
 
