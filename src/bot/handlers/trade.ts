@@ -28,21 +28,15 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
       return;
     }
 
-    const editOrReply = (text: string, opts?: Record<string, any>) => {
-      if (ctx.callbackQuery?.message) {
-        return ctx.editMessageText(text, { parse_mode: 'HTML', ...opts });
-      }
-      return ctx.reply(text, { parse_mode: 'HTML', ...opts });
-    };
-
     if (!wallet.apiWalletPrivateKey) {
-      await editOrReply(
+      await ctx.reply(
         '⚠️ <b>Cannot trade real money yet.</b>\n\n' +
         '• <b>Requirements:</b> 10+ USDC on Hyperliquid + an API wallet\n\n' +
         'Go to <b>Wallet Status → [SET UP API WALLET]</b>\n' +
         '(costs ~$0.01 USDC on Hyperliquid).\n\n' +
         'This creates a separate API wallet for trading while keeping your main wallet safe.\n\n' +
-        '📖 Check the GUIDE button for deposit + setup walkthrough.'
+        '📖 Check the GUIDE button for deposit + setup walkthrough.',
+        { parse_mode: 'HTML' }
       );
       return;
     }
@@ -50,32 +44,22 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
     const available = await getUserUsdcBalance(wallet.address);
 
     if (available < 10) {
-      await editOrReply(
+      await ctx.reply(
         `❌ Minimum <b>10 USDC</b> required. Current: <b>${available.toFixed(2)}</b> USDC.\n\n` +
         `Deposit via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
         `📖 Check the GUIDE button for step-by-step deposit instructions.`,
-        { link_preview_options: { is_disabled: true } }
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
       );
       return;
     }
 
     await setUserStep(chatId, 'awaiting_real_trade_amount');
 
-    const text = promptTradeAmount(available);
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
-    } else {
-      const msg = await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, msg.message_id);
-    }
+    const msg = await ctx.reply(promptTradeAmount(available), {
+      parse_mode: 'HTML',
+      ...backKeyboard(),
+    });
+    addPromptMessage(chatId, msg.message_id);
   } else {
     await setUserStep(chatId, 'awaiting_trade_amount');
     const user = await getUser(chatId);
@@ -85,21 +69,11 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
     const allocated = positions.filter(p => p.accountMode !== 'real').reduce((s, p) => s + p.allocatedAmount, 0);
     const available = user.usdtBalance - allocated;
 
-    const text = promptTradeAmount(available);
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
-    } else {
-      const msg = await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, msg.message_id);
-    }
+    const msg = await ctx.reply(promptTradeAmount(available), {
+      parse_mode: 'HTML',
+      ...backKeyboard(),
+    });
+    addPromptMessage(chatId, msg.message_id);
   }
 }
 
@@ -138,15 +112,10 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     setTradeMode(chatId, 'limit');
     await setUserStep(chatId, 'awaiting_limit_duration');
 
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(PROMPT_LIMIT_DURATION, {
-        parse_mode: 'HTML',
-        ...backKeyboard(),
-      });
-      addPromptMessage(chatId, ctx.callbackQuery.message.message_id);
-    } else {
-      const msg = await ctx.reply(PROMPT_LIMIT_DURATION, backKeyboard());
-      addPromptMessage(chatId, msg.message_id);
-    }
+    const msg = await ctx.reply(PROMPT_LIMIT_DURATION, {
+      parse_mode: 'HTML',
+      ...backKeyboard(),
+    });
+    addPromptMessage(chatId, msg.message_id);
   });
 }
