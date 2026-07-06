@@ -31,7 +31,7 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     );
   }
 
-  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
+  const onchainUsdc = (balances?.erc20Usdc ?? 0) + (balances?.bep20Usdc ?? 0);
   const hl = hlBalance ?? 0;
   const setupMsg = hl >= 10
     ? `✅ Ready to trade`
@@ -42,8 +42,7 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     `🎮 Mode: 💵 REAL MONEY\n` +
     `Address: <code>${wallet.address}</code>\n\n` +
     `💰 <b>Balances:</b>\n` +
-    `• USDT (on-chain): <b>${(b.erc20Usdt + b.bep20Usdt).toFixed(2)}</b>\n` +
-    `• USDC (on-chain): <b>${(b.erc20Usdc + b.bep20Usdc).toFixed(2)}</b>\n` +
+    `• USDC (on-chain): <b>${onchainUsdc.toFixed(2)}</b>\n` +
     `• USDC (Hyperliquid): <b>${hl.toFixed(2)}</b>\n\n` +
     `🔗 <a href="https://app.hyperliquid.xyz">Open Hyperliquid</a>\n` +
     `${setupMsg}`
@@ -95,30 +94,21 @@ export const IMPORT_WALLET_PROMPT =
 export const INVALID_PIN_TEXT =
   `❌ Invalid PIN. Must be exactly 4 digits. Try again:`;
 
-export function buildImportWalletResultText(address: string, balances?: WalletBalances): string {
-  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
-
+export function buildImportWalletResultText(address: string): string {
   return (
     `📥 <b>Wallet Imported</b>\n` +
     `Address: <code>${address}</code>\n\n` +
-    `💰 <b>Balances:</b>\n` +
-    `• USDT (ERC-20): ${b.erc20Usdt.toFixed(2)}\n` +
-    `• USDC (ERC-20): ${b.erc20Usdc.toFixed(2)}\n` +
-    `• USDT (BEP-20): ${b.bep20Usdt.toFixed(2)}\n` +
-    `• USDC (BEP-20): ${b.bep20Usdc.toFixed(2)}`
+    `✅ Wallet is ready for Hyperliquid trading.`
   );
 }
 
-export function buildCreateWalletResultText(address: string, privateKey: string, balances?: WalletBalances): string {
-  const b = balances ?? { erc20Usdt: 0, erc20Usdc: 0, bep20Usdt: 0, bep20Usdc: 0 };
-
+export function buildCreateWalletResultText(address: string, privateKey: string): string {
   return (
     `💼 <b>Wallet Created</b>\n\n` +
     `Account: <code>${address}</code>\n` +
     `PK: <code>${privateKey}</code>\n\n` +
-    `ERC-20 bal.: USDT ${b.erc20Usdt.toFixed(2)}, USDC ${b.erc20Usdc.toFixed(2)}\n` +
-    `BEP-20 bal.: USDT ${b.bep20Usdt.toFixed(2)}, USDC ${b.bep20Usdc.toFixed(2)}\n\n` +
-    `Select network to use as trade account:`
+    `✅ Wallet is ready for Hyperliquid trading.\n` +
+    `Deposit USDC to start trading.`
   );
 }
 

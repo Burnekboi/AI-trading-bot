@@ -1,6 +1,6 @@
 import { Context, Markup, Telegraf } from 'telegraf';
 import { getUser, setUserStep, updateAccountMode } from '../../db/repositories/users';
-import { getWallet, deleteWallet, updateWalletNetwork, updateApiWallet } from '../../db/repositories/wallets';
+import { getWallet, deleteWallet, updateApiWallet } from '../../db/repositories/wallets';
 import {
   addPromptMessage,
   clearSession,
@@ -19,7 +19,7 @@ import {
 } from '../keyboards';
 import { getWalletBalances } from '../../services/balanceService';
 import { getUserUsdcBalance, generateAndApproveAgent } from '../../services/hyperliquidService';
-import type { AccountMode, WalletNetwork } from '../../types';
+import type { AccountMode } from '../../types';
 
 const pinBackKeyboard = (backAction: string) =>
   Markup.inlineKeyboard([
@@ -269,64 +269,6 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
       await ctx.editMessageText(buildWelcomeText(user.address), {
         parse_mode: 'HTML',
         ...modeSelectKeyboard(),
-      });
-    }
-  });
-
-  bot.action('import_wallet_erc20', async (ctx) => {
-    await ctx.answerCbQuery();
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    await updateWalletNetwork(chatId, 'ERC20');
-
-    const wallet = await getWallet(chatId);
-    if (!wallet) return;
-
-    const balances = await getWalletBalances(wallet.address);
-    const text =
-      `📥 <b>Wallet Imported</b>\n` +
-      `Network: <b>ERC-20 (ETH)</b>\n` +
-      `Address: <code>${wallet.address}</code>\n\n` +
-      `💰 <b>Balances:</b>\n` +
-      `• USDT (ERC-20): ${balances.erc20Usdt.toFixed(2)}\n` +
-      `• USDC (ERC-20): ${balances.erc20Usdc.toFixed(2)}\n` +
-      `• USDT (BEP-20): ${balances.bep20Usdt.toFixed(2)}\n` +
-      `• USDC (BEP-20): ${balances.bep20Usdc.toFixed(2)}`;
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...importWalletResultKeyboard(),
-      });
-    }
-  });
-
-  bot.action('import_wallet_bep20', async (ctx) => {
-    await ctx.answerCbQuery();
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    await updateWalletNetwork(chatId, 'BEP20');
-
-    const wallet = await getWallet(chatId);
-    if (!wallet) return;
-
-    const balances = await getWalletBalances(wallet.address);
-    const text =
-      `📥 <b>Wallet Imported</b>\n` +
-      `Network: <b>BEP-20 (BNB)</b>\n` +
-      `Address: <code>${wallet.address}</code>\n\n` +
-      `💰 <b>Balances:</b>\n` +
-      `• USDT (ERC-20): ${balances.erc20Usdt.toFixed(2)}\n` +
-      `• USDC (ERC-20): ${balances.erc20Usdc.toFixed(2)}\n` +
-      `• USDT (BEP-20): ${balances.bep20Usdt.toFixed(2)}\n` +
-      `• USDC (BEP-20): ${balances.bep20Usdc.toFixed(2)}`;
-
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...importWalletResultKeyboard(),
       });
     }
   });

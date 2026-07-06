@@ -64,21 +64,8 @@ export const mainWalletViewKeyboard = () =>
   [Markup.button.callback('⬅️ Back', 'back_to_wallet_status')],
 ]);
 
-export const createWalletKeyboard = () =>
-  Markup.inlineKeyboard([
-  [
-    Markup.button.callback('ERC-20 (ETH)', 'create_wallet_erc20'),
-    Markup.button.callback('BEP-20 (BNB)', 'create_wallet_bep20'),
-  ],
-  [Markup.button.callback('⬅️ Back', 'create_wallet_back')],
-]);
-
 export const importWalletResultKeyboard = () =>
   Markup.inlineKeyboard([
-  [
-    Markup.button.callback('ERC-20 (ETH)', 'import_wallet_erc20'),
-    Markup.button.callback('BEP-20 (BNB)', 'import_wallet_bep20'),
-  ],
   [Markup.button.callback('⬅️ Back', 'import_wallet_back')],
 ]);
 

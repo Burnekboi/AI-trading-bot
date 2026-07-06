@@ -439,8 +439,7 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           await deletePromptMessages(ctx, chatId);
           await setUserStep(chatId, null);
 
-          const balances = await getWalletBalances(wallet.address);
-          const resultText = buildCreateWalletResultText(wallet.address, wallet.privateKey, balances);
+          const resultText = buildCreateWalletResultText(wallet.address, wallet.privateKey);
 
           await ctx.reply(resultText, {
             parse_mode: 'HTML',
@@ -529,8 +528,7 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           await deletePromptMessages(ctx, chatId);
           await setUserStep(chatId, null);
 
-          const balances = await getWalletBalances(address);
-          const resultText = buildImportWalletResultText(address, balances);
+          const resultText = buildImportWalletResultText(address);
 
           await ctx.reply(resultText, {
             parse_mode: 'HTML',
