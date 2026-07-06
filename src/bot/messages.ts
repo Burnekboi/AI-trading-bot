@@ -37,11 +37,15 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     ? `✅ Ready to trade`
     : `⚠️  No USDC on Hyperliquid yet.\n\n` +
       `📋 <b>How to deposit (one-time, takes ~5 min):</b>\n` +
-      `1. Click "Open Hyperliquid" below\n` +
-      `2. Connect your wallet (MetaMask, OKX, etc.)\n` +
-      `3. Click "Deposit" in the top bar\n` +
-      `4. Enter USDC amount and confirm (Ethereum TX)\n` +
-      `5. Wait for confirmation, then come back here\n\n` +
+      `1. Open your wallet in MetaMask\n` +
+      `   (If you created a wallet in the bot, use\n` +
+      `   [VIEW MAIN WALLET] to copy its private key\n` +
+      `   and import it into MetaMask first)\n` +
+      `2. Click "Open Hyperliquid" below\n` +
+      `3. Connect your MetaMask wallet\n` +
+      `4. Click "Deposit" in the top bar\n` +
+      `5. Enter USDC amount and confirm (Ethereum TX)\n` +
+      `6. Wait for confirmation, then come back here\n\n` +
       `Minimum 10 USDC required to trade.`;
 
   return (
