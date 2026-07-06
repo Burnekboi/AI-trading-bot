@@ -36,28 +36,27 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
   const setupMsg = hl >= 10
     ? `✅ Ready to trade`
     : hl > 0 && hl < 10
-    ? `⚠️  Minimum 10 USDC required to trade. You have ${hl.toFixed(2)} USDC.\n\n` +
-      `📋 <b>One-time setup flow:</b>\n` +
-      `1. Deposit more USDC (steps below)\n` +
-      `2. Then click [SET UP API WALLET] in Wallet Status\n` +
-      `   (costs ~$0.01 USDC on HL for approval gas)`
+    ? `⚠️  Minimum 10 USDC required. You have ${hl.toFixed(2)} USDC on HL.\n\n` +
+      `Deposit more, then click Wallet Status → [SET UP API WALLET].`
     : `⚠️  No USDC on Hyperliquid yet.\n\n` +
-      `Your main wallet IS your Hyperliquid account —\n` +
-      `no separate signup needed.\n\n` +
-      `📋 <b>One-time setup:</b>\n` +
-      `Step 1 — Deposit USDC to Hyperliquid:\n` +
-      `  a. Open your wallet in MetaMask\n` +
-      `     (If you CREATED a wallet in the bot, use\n` +
-      `      [VIEW MAIN WALLET] to copy its private key\n` +
-      `      and import it into MetaMask first)\n` +
-      `  b. Click "Open Hyperliquid" below\n` +
-      `  c. Connect your MetaMask wallet\n` +
-      `  d. Click "Deposit" in the top bar\n` +
-      `  e. Enter USDC amount and confirm (Ethereum TX)\n` +
-      `  f. Wait for confirmation, then come back here\n\n` +
-      `Step 2 — After USDC arrives, click Wallet Status\n` +
-      `  → [SET UP API WALLET] (costs ~$0.01 USDC for gas)\n\n` +
-      `Then the bot is ready to trade! Minimum 10 USDC.`;
+      `📋 <b>One-time setup (use Arbitrum, ~$0.01 gas):</b>\n\n` +
+      `<b>If you already have MetaMask with USDC on Arbitrum:</b>\n` +
+      `1. Click "Open Hyperliquid" below\n` +
+      `2. Connect MetaMask (Arbitrum network)\n` +
+      `3. Click Deposit → choose Arbitrum\n` +
+      `4. Enter amount → confirm (~$0.01 gas)\n\n` +
+      `<b>If you use Binance/CEX and created wallet in bot:</b>\n` +
+      `1. Buy USDC on Binance\n` +
+      `2. Withdraw USDC to your wallet address below\n` +
+      `   Network: <b>Arbitrum One</b>\n` +
+      `   Address: <code>${wallet.address}</code>\n` +
+      `3. Import that PK into MetaMask\n` +
+      `4. Connect to Hyperliquid → Deposit (Arbitrum)\n\n` +
+      `<b>After deposit arrives:</b>\n` +
+      `• Click Wallet Status → [SET UP API WALLET]\n` +
+      `  (costs ~$0.01 USDC on HL)\n` +
+      `• Then you can trade!\n\n` +
+      `Deposit at least 10-15 USDC.`;
 
   return (
     `🤖 <b>AI Trading Bot</b>\n` +
