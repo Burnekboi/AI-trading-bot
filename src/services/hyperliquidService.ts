@@ -1,8 +1,17 @@
 import { ethers } from 'ethers';
-import { HttpTransport, InfoClient, ExchangeClient } from '@nktkas/hyperliquid';
+import type { HttpTransport as HttpTransportType, InfoClient as InfoClientType, ExchangeClient as ExchangeClientType } from '@nktkas/hyperliquid';
 
-const transport = new HttpTransport();
-const infoClient = new InfoClient({ transport });
+let transport: InstanceType<typeof HttpTransportType>;
+let infoClient: InstanceType<typeof InfoClientType>;
+let ExchangeClient: typeof ExchangeClientType;
+
+async function init(): Promise<void> {
+  if (transport) return;
+  const hl = await import('@nktkas/hyperliquid');
+  transport = new hl.HttpTransport();
+  infoClient = new hl.InfoClient({ transport });
+  ExchangeClient = hl.ExchangeClient;
+}
 
 export interface HLPosition {
   coin: string;
@@ -39,23 +48,28 @@ export interface HLUniverseItem {
   maxLeverage: number;
 }
 
-export function getInfoClient(): InfoClient {
+export async function getInfoClient(): Promise<InfoClientType> {
+  await init();
   return infoClient;
 }
 
 export async function getAllMids(): Promise<Record<string, string>> {
+  await init();
   return infoClient.allMids();
 }
 
 export async function getMeta(): Promise<{ universe: HLUniverseItem[] }> {
+  await init();
   return infoClient.meta();
 }
 
 export async function getMetaAndAssetCtxs(): Promise<[{ universe: HLUniverseItem[] }, HLAssetCtx[]]> {
+  await init();
   return infoClient.metaAndAssetCtxs() as Promise<[{ universe: HLUniverseItem[] }, HLAssetCtx[]]>;
 }
 
 export async function getUserState(address: string): Promise<HLUserState> {
+  await init();
   return infoClient.clearinghouseState({ user: address }) as Promise<HLUserState>;
 }
 
@@ -77,7 +91,8 @@ export async function getUserOpenPositions(address: string): Promise<HLPosition[
   }
 }
 
-function createExchangeClient(privateKey: string): ExchangeClient {
+async function createExchangeClient(privateKey: string): Promise<ExchangeClientType> {
+  await init();
   const wallet = new ethers.Wallet(privateKey.startsWith('0x') ? privateKey : '0x' + privateKey);
   return new ExchangeClient({ transport, wallet });
 }
@@ -90,7 +105,7 @@ export async function placeMarketOrder(
   price: string,
   reduceOnly: boolean = false
 ): Promise<any> {
-  const client = createExchangeClient(privateKey);
+  const client = await createExchangeClient(privateKey);
   return client.order({
     orders: [{
       a: coin,
@@ -110,7 +125,7 @@ export async function setLeverage(
   leverage: number,
   isCross: boolean = false
 ): Promise<any> {
-  const client = createExchangeClient(privateKey);
+  const client = await createExchangeClient(privateKey);
   return client.updateLeverage({
     asset: coin,
     isCross,
@@ -150,6 +165,7 @@ export function hlToSymbol(coin: string): string {
 export async function generateAndApproveAgent(
   mainWalletPrivateKey: string
 ): Promise<{ apiAddress: string; apiPrivateKey: string }> {
+  await init();
   const apiWallet = ethers.Wallet.createRandom();
   const apiAddress = apiWallet.address;
   const apiPrivateKey = apiWallet.privateKey;
