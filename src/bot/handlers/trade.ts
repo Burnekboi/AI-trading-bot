@@ -28,13 +28,21 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
       return;
     }
 
+    const editOrReply = (text: string, opts?: Record<string, any>) => {
+      if (ctx.callbackQuery?.message) {
+        return ctx.editMessageText(text, { parse_mode: 'HTML', ...opts });
+      }
+      return ctx.reply(text, { parse_mode: 'HTML', ...opts });
+    };
+
     if (!wallet.apiWalletPrivateKey) {
-      await ctx.reply(
-        '⚠️ <b>API wallet not set up.</b>\n\n' +
+      await editOrReply(
+        '⚠️ <b>Cannot trade real money yet.</b>\n\n' +
+        '• <b>Requirements:</b> 10+ USDC on Hyperliquid + an API wallet\n\n' +
         'Go to <b>Wallet Status → [SET UP API WALLET]</b>\n' +
         '(costs ~$0.01 USDC on Hyperliquid).\n\n' +
-        'This creates a separate API wallet for trading while keeping your main wallet safe.',
-        { parse_mode: 'HTML' }
+        'This creates a separate API wallet for trading while keeping your main wallet safe.\n\n' +
+        '📖 Check the GUIDE button for deposit + setup walkthrough.'
       );
       return;
     }
@@ -42,11 +50,11 @@ export async function startTradeFlow(ctx: Context, chatId: number, accountMode: 
     const available = await getUserUsdcBalance(wallet.address);
 
     if (available < 10) {
-      await ctx.reply(
-        `❌ Minimum 10 USDC Hyperliquid balance required. Current: ${available.toFixed(2)} USDC.\n\n` +
-        `Deposit USDC to Hyperliquid via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
-        `📖 Check the GUIDE button in the dashboard for step-by-step deposit instructions.`,
-        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      await editOrReply(
+        `❌ Minimum <b>10 USDC</b> required. Current: <b>${available.toFixed(2)}</b> USDC.\n\n` +
+        `Deposit via <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n\n` +
+        `📖 Check the GUIDE button for step-by-step deposit instructions.`,
+        { link_preview_options: { is_disabled: true } }
       );
       return;
     }

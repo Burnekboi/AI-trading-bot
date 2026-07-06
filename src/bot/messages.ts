@@ -134,23 +134,24 @@ export function buildRealMoneyGuideText(): string {
     `<b>What you need:</b>\n` +
     `• A wallet (create or import one in the bot)\n` +
     `• USDC on Arbitrum (buy on Binance or other CEX)\n` +
-    `• MetaMask (free browser extension)\n\n` +
+    `• <a href="https://metamask.io">MetaMask</a> (free browser extension)\n` +
+    `• <a href="https://app.hyperliquid.xyz">Hyperliquid</a> account\n\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
     `<b>Step 1 — Get USDC into your wallet</b>\n\n` +
     `<b>If you CREATED a wallet in the bot:</b>\n` +
-    `1. Buy USDC on Binance/CEX\n` +
+    `1. Buy USDC on <a href="https://www.binance.com">Binance</a> / CEX\n` +
     `2. Withdraw to your bot wallet address below\n` +
     `   Network: <b>Arbitrum One</b> (gas ~$0.01)\n` +
-    `3. Import wallet PK into MetaMask:\n` +
+    `3. <a href="https://metamask.io">Install MetaMask</a> → import wallet PK:\n` +
     `   Wallet Status → VIEW MAIN WALLET →\n` +
     `   copy private key → import in MetaMask\n\n` +
     `<b>If you IMPORTED an existing MetaMask wallet:</b>\n` +
-    `• Your wallet is already in MetaMask\n` +
+    `• Your wallet is already in <a href="https://metamask.io">MetaMask</a>\n` +
     `• Buy USDC on CEX → withdraw to your\n` +
     `  MetaMask address on Arbitrum One\n\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
     `<b>Step 2 — Deposit to Hyperliquid</b>\n\n` +
-    `1. Click the "Open Hyperliquid" link below\n` +
+    `1. Go to <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n` +
     `2. Connect your MetaMask (Arbitrum network)\n` +
     `3. Click Deposit → choose Arbitrum\n` +
     `4. Enter 10-15 USDC → confirm (~$0.01 gas)\n` +
