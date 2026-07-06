@@ -35,18 +35,29 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
   const hl = hlBalance ?? 0;
   const setupMsg = hl >= 10
     ? `✅ Ready to trade`
+    : hl > 0 && hl < 10
+    ? `⚠️  Minimum 10 USDC required to trade. You have ${hl.toFixed(2)} USDC.\n\n` +
+      `📋 <b>One-time setup flow:</b>\n` +
+      `1. Deposit more USDC (steps below)\n` +
+      `2. Then click [SET UP API WALLET] in Wallet Status\n` +
+      `   (costs ~$0.01 USDC on HL for approval gas)`
     : `⚠️  No USDC on Hyperliquid yet.\n\n` +
-      `📋 <b>How to deposit (one-time, takes ~5 min):</b>\n` +
-      `1. Open your wallet in MetaMask\n` +
-      `   (If you created a wallet in the bot, use\n` +
-      `   [VIEW MAIN WALLET] to copy its private key\n` +
-      `   and import it into MetaMask first)\n` +
-      `2. Click "Open Hyperliquid" below\n` +
-      `3. Connect your MetaMask wallet\n` +
-      `4. Click "Deposit" in the top bar\n` +
-      `5. Enter USDC amount and confirm (Ethereum TX)\n` +
-      `6. Wait for confirmation, then come back here\n\n` +
-      `Minimum 10 USDC required to trade.`;
+      `Your main wallet IS your Hyperliquid account —\n` +
+      `no separate signup needed.\n\n` +
+      `📋 <b>One-time setup:</b>\n` +
+      `Step 1 — Deposit USDC to Hyperliquid:\n` +
+      `  a. Open your wallet in MetaMask\n` +
+      `     (If you CREATED a wallet in the bot, use\n` +
+      `      [VIEW MAIN WALLET] to copy its private key\n` +
+      `      and import it into MetaMask first)\n` +
+      `  b. Click "Open Hyperliquid" below\n` +
+      `  c. Connect your MetaMask wallet\n` +
+      `  d. Click "Deposit" in the top bar\n` +
+      `  e. Enter USDC amount and confirm (Ethereum TX)\n` +
+      `  f. Wait for confirmation, then come back here\n\n` +
+      `Step 2 — After USDC arrives, click Wallet Status\n` +
+      `  → [SET UP API WALLET] (costs ~$0.01 USDC for gas)\n\n` +
+      `Then the bot is ready to trade! Minimum 10 USDC.`;
 
   return (
     `🤖 <b>AI Trading Bot</b>\n` +

@@ -218,6 +218,17 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     }
 
     try {
+      const hlUsdc = await getUserUsdcBalance(wallet.address);
+      if (hlUsdc < 0.02) {
+        await ctx.editMessageText(
+          `❌ API wallet setup requires a tiny USDC balance on Hyperliquid for gas.\n\n` +
+          `You have <b>${hlUsdc.toFixed(4)} USDC</b> on HL.\n\n` +
+          `Deposit at least ~$1 USDC first, then try again.`,
+          { parse_mode: 'HTML', ...realDashboardKeyboard(true) }
+        );
+        return;
+      }
+
       await ctx.editMessageText('⏳ Generating and approving API wallet on Hyperliquid...');
 
       const result = await generateAndApproveAgent(wallet.privateKey);
