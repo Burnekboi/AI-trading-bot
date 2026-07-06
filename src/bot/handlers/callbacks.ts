@@ -681,14 +681,19 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
     await setUserStep(chatId, null);
 
     if (pendingMode === 'real' || user.accountMode === 'real') {
-      const wallet = await getWallet(chatId);
-      const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-      const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
-      const text = buildRealDashboardText(wallet, balances, hlBalance);
+      let wallet, balances, hlBalance;
+      try {
+        wallet = await getWallet(chatId);
+        balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+        hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+      } catch (e) {
+        console.error('[back_to_dashboard real] balance error:', e);
+      }
+      const text = buildRealDashboardText(wallet ?? null, balances, hlBalance);
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
         link_preview_options: { is_disabled: true },
-        ...realDashboardKeyboard(wallet !== null),
+        ...realDashboardKeyboard(!!wallet),
       });
       return;
     }
@@ -775,44 +780,48 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
 }
 
 async function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): Promise<void> {
-  if (user.accountMode === 'real') {
-    const wallet = await getWallet(user.chatId);
-    const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-    const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
-    const text = buildRealDashboardText(wallet, balances, hlBalance);
+  try {
+    if (user.accountMode === 'real') {
+      const wallet = await getWallet(user.chatId);
+      const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+      const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+      const text = buildRealDashboardText(wallet, balances, hlBalance);
+
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...realDashboardKeyboard(wallet !== null),
+        });
+      } else {
+        await ctx.reply(text, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...realDashboardKeyboard(wallet !== null),
+        });
+      }
+      return;
+    }
+
+    const text = buildDashboardText(
+      user.address,
+      user.usdtBalance,
+      user.usdcBalance
+    );
 
     if (ctx.callbackQuery?.message) {
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...realDashboardKeyboard(wallet !== null),
-      }).catch(() => {});
+        ...mainDashboardKeyboard(hasPositions),
+      });
     } else {
       await ctx.reply(text, {
         parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...realDashboardKeyboard(wallet !== null),
+        ...mainDashboardKeyboard(hasPositions),
       });
     }
-    return;
-  }
-
-  const text = buildDashboardText(
-    user.address,
-    user.usdtBalance,
-    user.usdcBalance
-  );
-
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions),
-    }).catch(() => {});
-  } else {
-    await ctx.reply(text, {
-      parse_mode: 'HTML',
-      ...mainDashboardKeyboard(hasPositions),
-    });
+  } catch (error) {
+    console.error('[showDashboard error]', error);
   }
 }
 
@@ -828,7 +837,7 @@ async function switchMode(ctx: Context, chatId: number, mode: AccountMode): Prom
   user.accountMode = mode;
 
   const positions = await getUserPositions(chatId);
-  showDashboard(ctx, user, positions.length > 0);
+  await showDashboard(ctx, user, positions.length > 0);
 }
 
 export function registerModeHandlers(bot: Telegraf<Context>): void {

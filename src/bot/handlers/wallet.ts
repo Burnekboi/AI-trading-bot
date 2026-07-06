@@ -29,25 +29,29 @@ const pinBackKeyboard = (backAction: string) =>
 ]);
 
 export async function showRealDashboard(ctx: Context, chatId: number): Promise<void> {
-  const user = await getUser(chatId);
-  if (!user) return;
-  const wallet = await getWallet(chatId);
-  const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-  const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
-  const text = buildRealDashboardText(wallet, balances, hlBalance);
+  try {
+    const user = await getUser(chatId);
+    if (!user) return;
+    const wallet = await getWallet(chatId);
+    const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+    const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+    const text = buildRealDashboardText(wallet, balances, hlBalance);
 
-  if (ctx.callbackQuery?.message) {
-    await ctx.editMessageText(text, {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-      ...realDashboardKeyboard(wallet !== null),
-    }).catch(() => {});
-  } else {
-    await ctx.reply(text, {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-      ...realDashboardKeyboard(wallet !== null),
-    });
+    if (ctx.callbackQuery?.message) {
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...realDashboardKeyboard(wallet !== null),
+      });
+    } else {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+        ...realDashboardKeyboard(wallet !== null),
+      });
+    }
+  } catch (error) {
+    console.error('[showRealDashboard error]', error);
   }
 }
 

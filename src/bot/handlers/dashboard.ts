@@ -19,22 +19,27 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
     }
 
     if (user.accountMode === 'real') {
-      const wallet = await getWallet(chatId);
-      const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-      const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
-      const text = buildRealDashboardText(wallet, balances, hlBalance);
+      let wallet, balances, hlBalance;
+      try {
+        wallet = await getWallet(chatId);
+        balances = wallet ? await getWalletBalances(wallet.address) : undefined;
+        hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+      } catch (e) {
+        console.error('[open_dashboard real] balance fetch error:', e);
+      }
+      const text = buildRealDashboardText(wallet ?? null, balances, hlBalance);
 
       if (ctx.callbackQuery?.message) {
         await ctx.editMessageText(text, {
           parse_mode: 'HTML',
           link_preview_options: { is_disabled: true },
-          ...realDashboardKeyboard(wallet !== null),
-        }).catch(() => {});
+          ...realDashboardKeyboard(!!wallet),
+        });
       } else {
         await ctx.reply(text, {
           parse_mode: 'HTML',
           link_preview_options: { is_disabled: true },
-          ...realDashboardKeyboard(wallet !== null),
+          ...realDashboardKeyboard(!!wallet),
         });
       }
       return;
