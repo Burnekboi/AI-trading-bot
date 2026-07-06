@@ -162,6 +162,121 @@ export function hlToSymbol(coin: string): string {
   return coin + 'USDT';
 }
 
+export interface HlCandle {
+  t: number;
+  T: number;
+  s: string;
+  i: string;
+  o: string;
+  c: string;
+  h: string;
+  l: string;
+  v: string;
+  n: number;
+}
+
+export type Kline = [
+  openTime: number,
+  open: string,
+  high: string,
+  low: string,
+  close: string,
+  volume: string,
+  closeTime: number,
+  quoteVolume: string,
+];
+
+export function hlCandleToKline(candle: HlCandle): Kline {
+  return [
+    candle.t,
+    candle.o,
+    candle.h,
+    candle.l,
+    candle.c,
+    candle.v,
+    candle.T,
+    '0',
+  ];
+}
+
+export interface HlPairInfo {
+  coin: string;
+  dayNtlVlm: number;
+  markPx: number;
+  midPx: number;
+  funding: number;
+  openInterest: number;
+  prevDayPx: number;
+  szDecimals: number;
+  maxLeverage: number;
+}
+
+export async function getActiveHlPairs(): Promise<HlPairInfo[]> {
+  await init();
+  const [meta, ctxs] = await getMetaAndAssetCtxs();
+  return meta.universe.map((item, i) => {
+    const ctx = ctxs[i];
+    return {
+      coin: item.name,
+      dayNtlVlm: parseFloat(ctx.dayNtlVlm),
+      markPx: parseFloat(ctx.markPx),
+      midPx: parseFloat(ctx.midPx),
+      funding: parseFloat(ctx.funding),
+      openInterest: parseFloat(ctx.openInterest),
+      prevDayPx: parseFloat(ctx.prevDayPx),
+      szDecimals: item.szDecimals,
+      maxLeverage: item.maxLeverage,
+    };
+  });
+}
+
+export async function getHlCandles(
+  coin: string,
+  interval: string,
+  limit: number
+): Promise<Kline[]> {
+  await init();
+  const endTime = Date.now();
+  const msPerCandle: Record<string, number> = {
+    '1m': 60000, '3m': 180000, '5m': 300000, '15m': 900000,
+    '30m': 1800000, '1h': 3600000, '2h': 7200000, '4h': 14400000,
+    '8h': 28800000, '12h': 43200000, '1d': 86400000,
+  };
+  const ms = msPerCandle[interval] ?? 3600000;
+  const startTime = endTime - ms * limit;
+
+  const candles = await infoClient.candleSnapshot({
+    coin,
+    interval: interval as any,
+    startTime,
+    endTime,
+  });
+
+  return candles.map(hlCandleToKline);
+}
+
+export async function placeLimitOrder(
+  privateKey: string,
+  coin: string,
+  isBuy: boolean,
+  size: string,
+  price: string,
+  reduceOnly: boolean = false
+): Promise<any> {
+  const client = await createExchangeClient(privateKey);
+  return client.order({
+    orders: [{
+      a: coin,
+      b: isBuy,
+      p: price,
+      s: size,
+      r: reduceOnly,
+      t: { limit: { tif: 'Gtc' } },
+    }],
+    grouping: 'na',
+  });
+}
+
 export async function generateAndApproveAgent(
   mainWalletPrivateKey: string
 ): Promise<{ apiAddress: string; apiPrivateKey: string }> {

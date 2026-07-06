@@ -113,6 +113,8 @@ export function registerTradeHandlers(bot: Telegraf<Context>): void {
     if (!chatId) return;
 
     await clearSession(chatId);
+    const user = await getUser(chatId);
+    setPendingAccountMode(chatId, user?.accountMode ?? 'simulation');
     setTradeMode(chatId, 'limit');
     await setUserStep(chatId, 'awaiting_limit_duration');
 

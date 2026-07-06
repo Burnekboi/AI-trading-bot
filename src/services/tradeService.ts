@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { runMarketSweepTopN } from '../ai/engine';
+import { runHlMarketSweepTopN } from '../ai/hlEngine';
 import { recordTradeOutcome } from '../ai/modelState';
 import {
   createPosition,
@@ -16,6 +17,7 @@ import {
   getUserUsdcBalance,
   getUserOpenPositions as getHlOpenPositions,
   placeMarketOrder,
+  placeLimitOrder,
   setLeverage,
   closePosition as closeHlPosition,
   getCoinPrice,
@@ -28,6 +30,7 @@ import type {
   ClosePositionResult,
   TradeDecision,
   TradeDirection,
+  TradeMode,
 } from '../types';
 
 function toHlCoin(symbol: string): string {
@@ -187,7 +190,8 @@ export async function executeMultipleTrades(
 export async function executeRealMultipleTrades(
   chatId: number,
   amountPerPair: number,
-  count: number
+  count: number,
+  tradeMode: TradeMode = 'market'
 ): Promise<ActivePosition[]> {
   const user = await getUser(chatId);
   if (!user) throw new Error('User not found.');
@@ -208,7 +212,7 @@ export async function executeRealMultipleTrades(
   const existingPositions = await getUserPositions(chatId);
   const heldSymbols = new Set(existingPositions.map(p => p.symbol));
 
-  const decisions = await runMarketSweepTopN(count + heldSymbols.size);
+  const decisions = await runHlMarketSweepTopN(count + heldSymbols.size);
 
   const freshDecisions = decisions
     .filter(d => !heldSymbols.has(d.symbol))
@@ -240,7 +244,11 @@ export async function executeRealMultipleTrades(
       const sizeStr = size.toString();
       const priceStr = currentPrice.toString();
 
-      await placeMarketOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
+      if (tradeMode === 'limit') {
+        await placeLimitOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
+      } else {
+        await placeMarketOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
+      }
 
       const ordersResponse = await (await import('./hyperliquidService')).getUserOpenPositions(wallet.address);
       const match = ordersResponse.find(
@@ -276,6 +284,16 @@ export async function autoStartTrade(
 ): Promise<ActivePosition | null> {
   const user = await getUser(chatId);
   if (!user?.lastTradeAmount) return null;
+
+  if (user.accountMode === 'real') {
+    const wallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
+    if (!wallet) return null;
+    const hlBalance = await getUserUsdcBalance(wallet.address);
+    const amount = Math.min(user.lastTradeAmount, hlBalance);
+    if (amount <= 0) return null;
+    const positions = await executeRealMultipleTrades(chatId, amount, 1, 'market');
+    return positions[0] ?? null;
+  }
 
   const amount = Math.min(user.lastTradeAmount, user.usdtBalance);
   if (amount <= 0) return null;

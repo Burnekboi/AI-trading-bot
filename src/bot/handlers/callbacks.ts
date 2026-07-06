@@ -257,7 +257,8 @@ async function processRealTradeAmount(ctx: Context, chatId: number, amount: numb
     addPromptMessage(chatId, scanningMsg.message_id);
 
     try {
-      const trades = await executeRealMultipleTrades(chatId, amount, 1);
+      const tradeMode = getTradeMode(chatId) ?? 'market';
+      const trades = await executeRealMultipleTrades(chatId, amount, 1, tradeMode);
 
       await deletePromptMessages(ctx, chatId);
 
@@ -336,7 +337,8 @@ async function processRealPairCount(ctx: Context, chatId: number, text: string):
   addPromptMessage(chatId, scanningMsg.message_id);
 
   try {
-    const trades = await executeRealMultipleTrades(chatId, amount, count);
+    const tradeMode = getTradeMode(chatId) ?? 'market';
+    const trades = await executeRealMultipleTrades(chatId, amount, count, tradeMode);
 
     await deletePromptMessages(ctx, chatId);
 
@@ -395,7 +397,12 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
           await ctx.reply('Invalid amount. Enter a positive number (e.g., 20).');
           return;
         }
-        await processTradeAmount(ctx, chatId, amount);
+        const mode = getPendingAccountMode(chatId) ?? 'simulation';
+        if (mode === 'real') {
+          await processRealTradeAmount(ctx, chatId, amount);
+        } else {
+          await processTradeAmount(ctx, chatId, amount);
+        }
         break;
       }
 

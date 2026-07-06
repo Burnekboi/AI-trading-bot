@@ -2,6 +2,7 @@ import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import { getAllActivePositions } from '../db/repositories/positions';
 import { getCurrentPrice } from '../mexc/client';
+import { getCoinPrice as getHlPrice } from './hyperliquidService';
 import {
   closePositionByMessage,
   isStopLossHit,
@@ -21,6 +22,10 @@ import {
 } from '../bot/messages';
 import { positionKeyboard } from '../bot/keyboards';
 
+function coinFromSymbol(symbol: string): string {
+  return symbol.replace('USDT', '').replace('USDC', '');
+}
+
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
 
 export function startPositionMonitor(bot: Telegraf): void {
@@ -30,11 +35,11 @@ export function startPositionMonitor(bot: Telegraf): void {
     const positions = await getAllActivePositions();
 
     for (const position of positions) {
-      if (position.accountMode === 'real') continue; // MEXC handles TP/SL/liquidation
-
       try {
         const now = Date.now();
-        const currentPrice = await getCurrentPrice(position.symbol);
+        const currentPrice = position.accountMode === 'real'
+          ? await getHlPrice(coinFromSymbol(position.symbol))
+          : await getCurrentPrice(position.symbol);
 
         const timerExpired =
           position.timerExpiresAt !== null && now >= position.timerExpiresAt;
@@ -48,50 +53,52 @@ export function startPositionMonitor(bot: Telegraf): void {
           );
 
           if (partialTpTriggered) {
-            const user = await getUser(position.chatId);
-            if (user) {
-              const realizedPnl = position.allocatedAmount;
-              const newBalance = user.usdtBalance + realizedPnl;
-              await updateUserBalance(position.chatId, newBalance);
-
-              const newStopLoss = null;
-              await updatePositionPartialTp(
-                position.id!,
-                newStopLoss,
-                position.targetProfit
-              );
-              position.partialTpHit = true;
-              position.stopLoss = newStopLoss;
-
-              await logPerformance({
-                chatId: position.chatId,
-                strategyName: position.strategyName,
-                symbol: position.symbol,
-                direction: position.direction,
-                entryPrice: position.entryPrice,
-                exitPrice: currentPrice,
-                stopLoss: null,
-                targetProfit: position.targetProfit,
-                allocatedAmount: position.allocatedAmount,
-                closingStatus: 'Ended',
-                pnlUsdt: realizedPnl,
-                wasProfitable: true,
-              }).catch((err) => {
-                console.error('logPerformance for 1st TP failed (non-fatal):', err);
-              });
-
-              const text = buildActivePositionText(position);
-              try {
-                await bot.telegram.editMessageText(
-                  position.chatId,
-                  position.messageId,
-                  undefined,
-                  text,
-                  { parse_mode: 'HTML', ...positionKeyboard(position.symbol) }
-                );
-              } catch {
-                // Message may have been deleted
+            if (position.accountMode !== 'real') {
+              const user = await getUser(position.chatId);
+              if (user) {
+                const realizedPnl = position.allocatedAmount;
+                const newBalance = user.usdtBalance + realizedPnl;
+                await updateUserBalance(position.chatId, newBalance);
               }
+            }
+
+            const newStopLoss = null;
+            await updatePositionPartialTp(
+              position.id!,
+              newStopLoss,
+              position.targetProfit
+            );
+            position.partialTpHit = true;
+            position.stopLoss = newStopLoss;
+
+            await logPerformance({
+              chatId: position.chatId,
+              strategyName: position.strategyName,
+              symbol: position.symbol,
+              direction: position.direction,
+              entryPrice: position.entryPrice,
+              exitPrice: currentPrice,
+              stopLoss: null,
+              targetProfit: position.targetProfit,
+              allocatedAmount: position.allocatedAmount,
+              closingStatus: 'Ended',
+              pnlUsdt: position.allocatedAmount,
+              wasProfitable: true,
+            }).catch((err) => {
+              console.error('logPerformance for 1st TP failed (non-fatal):', err);
+            });
+
+            const text = buildActivePositionText(position);
+            try {
+              await bot.telegram.editMessageText(
+                position.chatId,
+                position.messageId,
+                undefined,
+                text,
+                { parse_mode: 'HTML', ...positionKeyboard(position.symbol) }
+              );
+            } catch {
+              // Message may have been deleted
             }
             continue;
           }

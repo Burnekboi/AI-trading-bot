@@ -3,6 +3,7 @@ import { config } from './config';
 import { initDatabase } from './db/database';
 import { createBot } from './bot';
 import { stopPositionMonitor } from './services/positionMonitor';
+import { recoverRealPositions } from './services/recoveryService';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const WEBHOOK_PATH = '/webhook';
@@ -50,6 +51,8 @@ async function main(): Promise<void> {
 
   try {
     await initDatabase();
+
+    await recoverRealPositions();
 
     const shutdown = async (signal: string) => {
       console.log(`\nReceived ${signal}, shutting down...`);

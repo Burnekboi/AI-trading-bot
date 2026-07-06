@@ -95,6 +95,26 @@ export async function updateWalletNetwork(chatId: number, network: WalletNetwork
   if (error) throw error;
 }
 
+export async function getAllWallets(): Promise<Wallet[]> {
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('*');
+
+  if (error || !data) return [];
+  return (data as any[]).map((d: any) => ({
+    id: d.id,
+    chatId: d.chat_id,
+    address: d.address,
+    privateKey: d.private_key,
+    pin: d.pin,
+    network: d.network as WalletNetwork,
+    apiWalletAddress: d.api_wallet_address ?? undefined,
+    apiWalletPrivateKey: d.api_wallet_private_key ?? undefined,
+    masterAddress: d.master_address ?? undefined,
+    createdAt: d.created_at,
+  }));
+}
+
 export async function deleteWallet(chatId: number): Promise<void> {
   const { error } = await supabase
     .from('wallets')
