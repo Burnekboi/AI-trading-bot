@@ -55,6 +55,7 @@ export const walletStatusKeyboard = (hasApiWallet: boolean) =>
   ] : [
     [Markup.button.callback('🔐 SET UP API WALLET', 'setup_api_wallet')],
   ]),
+  [Markup.button.callback('🗑 DELETE WALLET', 'real_delete_wallet')],
   [Markup.button.callback('⬅️ Back', 'wallet_status_back')],
 ]);
 
