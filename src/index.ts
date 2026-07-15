@@ -14,8 +14,9 @@ async function main(): Promise<void> {
   const bot = createBot(config.botToken);
 
   const server = http.createServer((req, res) => {
-    const logReq = () => console.log(`[${req.method}] ${req.url}`);
-    logReq();
+    if (req.url !== '/health') {
+      console.log(`[${req.method}] ${req.url}`);
+    }
 
     if (req.url === '/health' && req.method === 'GET') {
       res.writeHead(botStatus === 'running' ? 200 : 503, { 'Content-Type': 'application/json' });
