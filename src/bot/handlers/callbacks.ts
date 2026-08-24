@@ -9,7 +9,7 @@ import {
   closePosition,
   closePositionByMessage,
   closeAllPositions,
-  savePosition,
+  setPositionMessageId,
 } from '../../services/tradeService';
 import {
   addPromptMessage,
@@ -123,7 +123,7 @@ async function processTradeAmount(
           ...positionKeyboard(trade.symbol),
         });
         trade.messageId = cardMsg.message_id;
-        await savePosition(trade);
+        if (trade.id) await setPositionMessageId(trade.id, cardMsg.message_id);
       }
 
       clearSession(chatId);
@@ -204,7 +204,7 @@ async function processPairCount(
         ...positionKeyboard(trade.symbol),
       });
       trade.messageId = cardMsg.message_id;
-      await savePosition(trade);
+      if (trade.id) await setPositionMessageId(trade.id, cardMsg.message_id);
     }
 
     clearSession(chatId);
@@ -269,7 +269,7 @@ async function processRealTradeAmount(ctx: Context, chatId: number, amount: numb
           ...positionKeyboard(trade.symbol),
         });
         trade.messageId = cardMsg.message_id;
-        await savePosition(trade);
+        if (trade.id) await setPositionMessageId(trade.id, cardMsg.message_id);
       }
 
       clearSession(chatId);
@@ -349,7 +349,7 @@ async function processRealPairCount(ctx: Context, chatId: number, text: string):
         ...positionKeyboard(trade.symbol),
       });
       trade.messageId = cardMsg.message_id;
-      await savePosition(trade);
+      if (trade.id) await setPositionMessageId(trade.id, cardMsg.message_id);
     }
 
     clearSession(chatId);

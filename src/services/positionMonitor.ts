@@ -11,7 +11,7 @@ import {
   isLiquidationHit,
   getLiquidationPrice,
   autoStartTrade,
-  savePosition,
+  setPositionMessageId,
 } from './tradeService';
 import { updatePositionPartialTp } from '../db/repositories/positions';
 import { getUser, updateUserBalance } from '../db/repositories/users';
@@ -27,19 +27,45 @@ function coinFromSymbol(symbol: string): string {
 }
 
 let monitorInterval: ReturnType<typeof setInterval> | null = null;
+let tickRunning = false;
 
 export function startPositionMonitor(bot: Telegraf): void {
   if (monitorInterval) return;
 
   monitorInterval = setInterval(async () => {
-    const positions = await getAllActivePositions();
+    if (tickRunning) return;
+    tickRunning = true;
 
-    for (const position of positions) {
-      try {
+    try {
+      await runMonitorTick(bot);
+    } catch (error) {
+      console.error('Position monitor tick error:', error);
+    } finally {
+      tickRunning = false;
+    }
+  }, config.positionPollIntervalMs);
+
+  console.log(
+    `Position monitor started (interval: ${config.positionPollIntervalMs}ms)`
+  );
+}
+
+async function runMonitorTick(bot: Telegraf): Promise<void> {
+  const positions = await getAllActivePositions();
+
+  for (const position of positions) {
+    try {
         const now = Date.now();
         const currentPrice = position.accountMode === 'real'
           ? await getHlPrice(coinFromSymbol(position.symbol))
           : await getCurrentPrice(position.symbol);
+
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+          console.warn(
+            `[PositionMonitor] Skipping ${position.symbol} (chat ${position.chatId}): invalid price ${currentPrice}`
+          );
+          continue;
+        }
 
         const timerExpired =
           position.timerExpiresAt !== null && now >= position.timerExpiresAt;
@@ -168,7 +194,7 @@ export function startPositionMonitor(bot: Telegraf): void {
               }
             );
             next.messageId = msg.message_id;
-            savePosition(next);
+            if (next.id) await setPositionMessageId(next.id, msg.message_id);
           }
         }
       } catch (error) {
@@ -178,11 +204,6 @@ export function startPositionMonitor(bot: Telegraf): void {
         );
       }
     }
-  }, config.positionPollIntervalMs);
-
-  console.log(
-    `Position monitor started (interval: ${config.positionPollIntervalMs}ms)`
-  );
 }
 
 export function stopPositionMonitor(): void {

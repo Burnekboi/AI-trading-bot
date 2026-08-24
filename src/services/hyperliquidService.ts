@@ -97,6 +97,113 @@ async function createExchangeClient(privateKey: string): Promise<ExchangeClientT
   return new ExchangeClient({ transport, wallet });
 }
 
+// Hyperliquid tick/lot rules: max 5 significant figures on prices,
+// max (6 - szDecimals) decimal places for perps; sizes truncated to szDecimals.
+export const MARKET_ORDER_SLIPPAGE = 0.05;
+
+function truncateDecimalDigits(value: number, decimals: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (decimals <= 0) {
+    const floored = Math.floor(value);
+    return floored > 0 ? String(floored) : '';
+  }
+  const s = value.toFixed(Math.min(decimals + 10, 20));
+  const dot = s.indexOf('.');
+  if (dot === -1) return s;
+  return s.slice(0, dot + 1 + decimals);
+}
+
+function truncateToSigFigs(numStr: string, maxSig: number): string {
+  const dotIdx = numStr.indexOf('.');
+  const intPart = dotIdx === -1 ? numStr : numStr.slice(0, dotIdx);
+  const fracPart = dotIdx === -1 ? '' : numStr.slice(dotIdx + 1);
+
+  let seen = 0;
+  let started = false;
+
+  // Integer part: once the budget is spent, pad with zeros to preserve magnitude.
+  let newInt = '';
+  for (const ch of intPart) {
+    if (!started) {
+      newInt += ch;
+      if (ch !== '0') {
+        started = true;
+        seen = 1;
+      }
+      continue;
+    }
+    if (seen < maxSig) {
+      newInt += ch;
+      seen++;
+    } else {
+      newInt += '0';
+    }
+  }
+
+  // Fractional part: stop appending once the budget is spent (truncate).
+  let newFrac = '';
+  for (const ch of fracPart) {
+    if (!started) {
+      newFrac += ch;
+      if (ch !== '0') {
+        started = true;
+        seen = 1;
+      }
+      continue;
+    }
+    if (seen < maxSig) {
+      newFrac += ch;
+      seen++;
+    } else {
+      break;
+    }
+  }
+
+  newFrac = newFrac.replace(/0+$/, '');
+  return newFrac ? `${newInt}.${newFrac}` : newInt;
+}
+
+export function formatHlPrice(value: number, szDecimals: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+
+  if (Number.isInteger(value)) return String(value);
+
+  const maxDecimals = Math.max(6 - szDecimals, 0);
+  let s = truncateDecimalDigits(value, maxDecimals);
+  if (!s) return '';
+
+  if (!s.includes('.') || Number.isInteger(parseFloat(s))) {
+    return s.replace(/\.0+$/, '');
+  }
+
+  s = truncateToSigFigs(s, 5);
+  if (s.endsWith('.')) s = s.slice(0, -1);
+  if (parseFloat(s) <= 0) return '';
+  return s;
+}
+
+export function formatHlSize(value: number, szDecimals: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const s = truncateDecimalDigits(value, szDecimals);
+  if (!s || parseFloat(s) <= 0) return '';
+  if (s.includes('.')) {
+    const trimmed = s.replace(/\.?0+$/, '');
+    return parseFloat(trimmed) <= 0 ? s : trimmed;
+  }
+  return s;
+}
+
+async function getSzDecimals(coin: string): Promise<number> {
+  await init();
+  const meta = await infoClient.meta();
+  const item = meta.universe.find((u) => u.name === coin);
+  return item?.szDecimals ?? 0;
+}
+
+function applySlippage(price: number, isBuy: boolean): number {
+  return isBuy ? price * (1 + MARKET_ORDER_SLIPPAGE) : price * (1 - MARKET_ORDER_SLIPPAGE);
+}
+
 export async function placeMarketOrder(
   privateKey: string,
   coin: string,
@@ -106,12 +213,24 @@ export async function placeMarketOrder(
   reduceOnly: boolean = false
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
+  const szDecimals = await getSzDecimals(coin);
+
+  const pxNum = applySlippage(parseFloat(price), isBuy);
+  const px = formatHlPrice(pxNum, szDecimals);
+  const sz = formatHlSize(parseFloat(size), szDecimals);
+
+  if (!px || !sz || parseFloat(px) <= 0 || parseFloat(sz) <= 0) {
+    throw new Error(
+      `Invalid order params for ${coin}: px=${px || 'invalid'} sz=${sz || 'invalid'} (szDecimals=${szDecimals})`
+    );
+  }
+
   return client.order({
     orders: [{
       a: coin,
       b: isBuy,
-      p: price,
-      s: size,
+      p: px,
+      s: sz,
       r: reduceOnly,
       t: { limit: { tif: 'Ioc' } },
     }],
@@ -137,9 +256,12 @@ export async function closePosition(
   privateKey: string,
   coin: string,
   size: string,
-  price: string
+  price: string,
+  isLong: boolean
 ): Promise<any> {
-  return placeMarketOrder(privateKey, coin, false, size, price, true);
+  // Closing a LONG requires a sell; closing a SHORT requires a buy.
+  // Reduce-only caps the order at the existing position size.
+  return placeMarketOrder(privateKey, coin, !isLong, size, price, true);
 }
 
 export async function getCoinPrice(coin: string): Promise<number> {
@@ -264,12 +386,23 @@ export async function placeLimitOrder(
   reduceOnly: boolean = false
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
+  const szDecimals = await getSzDecimals(coin);
+
+  const px = formatHlPrice(parseFloat(price), szDecimals);
+  const sz = formatHlSize(parseFloat(size), szDecimals);
+
+  if (!px || !sz || parseFloat(px) <= 0 || parseFloat(sz) <= 0) {
+    throw new Error(
+      `Invalid limit order params for ${coin}: px=${px || 'invalid'} sz=${sz || 'invalid'} (szDecimals=${szDecimals})`
+    );
+  }
+
   return client.order({
     orders: [{
       a: coin,
       b: isBuy,
-      p: price,
-      s: size,
+      p: px,
+      s: sz,
       r: reduceOnly,
       t: { limit: { tif: 'Gtc' } },
     }],

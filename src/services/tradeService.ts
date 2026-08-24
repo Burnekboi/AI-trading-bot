@@ -22,6 +22,7 @@ import {
   closePosition as closeHlPosition,
   getCoinPrice,
   symbolToHl,
+  hlToSymbol,
   getAllMids,
 } from './hyperliquidService';
 import type {
@@ -35,6 +36,36 @@ import type {
 
 function toHlCoin(symbol: string): string {
   return symbol.replace('USDT', '').replace('USDC', '');
+}
+
+const chatTradeLocks = new Map<number, Promise<unknown>>();
+
+async function withChatLock<T>(chatId: number, fn: () => Promise<T>): Promise<T> {
+  const previous = chatTradeLocks.get(chatId) ?? Promise.resolve();
+  const run = previous.then(fn, fn);
+  chatTradeLocks.set(chatId, run);
+  try {
+    return await run;
+  } finally {
+    if (chatTradeLocks.get(chatId) === run) {
+      chatTradeLocks.delete(chatId);
+    }
+  }
+}
+
+function pickFreshDecisions(
+  decisions: TradeDecision[],
+  takenSymbols: Set<string>,
+  count: number
+): TradeDecision[] {
+  const fresh: TradeDecision[] = [];
+  for (const decision of decisions) {
+    if (takenSymbols.has(decision.symbol)) continue;
+    takenSymbols.add(decision.symbol);
+    fresh.push(decision);
+    if (fresh.length === count) break;
+  }
+  return fresh;
 }
 
 export function calculatePnl(
@@ -141,50 +172,59 @@ export async function executeMultipleTrades(
   count: number,
   accountMode?: AccountMode
 ): Promise<ActivePosition[]> {
-  const user = await getUser(chatId);
-  if (!user) {
-    throw new Error('User not found. Send /start first.');
-  }
+  return withChatLock(chatId, async () => {
+    const user = await getUser(chatId);
+    if (!user) {
+      throw new Error('User not found. Send /start first.');
+    }
 
-  const totalNeeded = amountPerPair * count;
-  const allocated = await getUserAllocatedTotal(chatId);
-  const available = user.usdtBalance - allocated;
+    const totalNeeded = amountPerPair * count;
+    const allocated = await getUserAllocatedTotal(chatId);
+    const available = user.usdtBalance - allocated;
 
-  if (totalNeeded > available) {
-    throw new Error(
-      `Insufficient balance. Need ${totalNeeded.toFixed(2)} USDT, ` +
-      `only ${available.toFixed(2)} USDT available.`
-    );
-  }
+    if (totalNeeded > available) {
+      throw new Error(
+        `Insufficient balance. Need ${totalNeeded.toFixed(2)} USDT, ` +
+        `only ${available.toFixed(2)} USDT available.`
+      );
+    }
 
-  const existingPositions = await getUserPositions(chatId);
-  const heldSymbols = new Set(existingPositions.map(p => p.symbol));
+    const existingPositions = await getUserPositions(chatId);
+    const takenSymbols = new Set(existingPositions.map(p => p.symbol));
 
-  const decisions = await runMarketSweepTopN(count + heldSymbols.size);
+    const decisions = await runMarketSweepTopN(count + takenSymbols.size);
 
-  const freshDecisions = decisions
-    .filter(d => !heldSymbols.has(d.symbol))
-    .slice(0, count);
+    const freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
 
-  if (freshDecisions.length === 0) {
-    throw new Error('No new coin pairs available to trade.');
-  }
+    if (freshDecisions.length === 0) {
+      throw new Error('No new coin pairs available to trade.');
+    }
 
-  return freshDecisions.map((decision) => ({
-    chatId,
-    messageId: 0,
-    symbol: decision.symbol,
-    direction: decision.direction,
-    allocatedAmount: amountPerPair,
-    entryPrice: decision.entryPrice,
-    stopLoss: decision.stopLoss,
-    targetProfit: decision.targetProfit,
-    leverage: decision.leverage,
-    strategyName: decision.strategyName,
-    timerExpiresAt: null,
-    partialTpHit: false,
-    accountMode,
-  }));
+    const results: ActivePosition[] = [];
+
+    for (const decision of freshDecisions) {
+      const position: ActivePosition = {
+        chatId,
+        messageId: 0,
+        symbol: decision.symbol,
+        direction: decision.direction,
+        allocatedAmount: amountPerPair,
+        entryPrice: decision.entryPrice,
+        stopLoss: decision.stopLoss,
+        targetProfit: decision.targetProfit,
+        leverage: decision.leverage,
+        strategyName: decision.strategyName,
+        timerExpiresAt: null,
+        partialTpHit: false,
+        accountMode,
+      };
+
+      await savePosition(position);
+      results.push(position);
+    }
+
+    return results;
+  });
 }
 
 export async function executeRealMultipleTrades(
@@ -193,90 +233,115 @@ export async function executeRealMultipleTrades(
   count: number,
   tradeMode: TradeMode = 'market'
 ): Promise<ActivePosition[]> {
-  const user = await getUser(chatId);
-  if (!user) throw new Error('User not found.');
+  return withChatLock(chatId, async () => {
+    const user = await getUser(chatId);
+    if (!user) throw new Error('User not found.');
 
-  const wallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
-  if (!wallet || !wallet.privateKey) throw new Error('No wallet found.');
+    const wallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
+    if (!wallet || !wallet.privateKey) throw new Error('No wallet found.');
 
-  const hlBalance = await getUserUsdcBalance(wallet.address);
-  const totalNeeded = amountPerPair * count;
+    const hlBalance = await getUserUsdcBalance(wallet.address);
+    const totalNeeded = amountPerPair * count;
 
-  if (totalNeeded > hlBalance) {
-    throw new Error(
-      `Insufficient Hyperliquid balance. Need ${totalNeeded.toFixed(2)} USDC, ` +
-      `only ${hlBalance.toFixed(2)} USDC available.`
-    );
-  }
-
-  const existingPositions = await getUserPositions(chatId);
-  const heldSymbols = new Set(existingPositions.map(p => p.symbol));
-
-  const decisions = await runHlMarketSweepTopN(count + heldSymbols.size);
-
-  const freshDecisions = decisions
-    .filter(d => !heldSymbols.has(d.symbol))
-    .slice(0, count);
-
-  if (freshDecisions.length === 0) {
-    throw new Error('No new coin pairs available to trade.');
-  }
-
-  const results: ActivePosition[] = [];
-  const mids = await getAllMids();
-
-  for (const decision of freshDecisions) {
-    try {
-      const coin = toHlCoin(decision.symbol);
-      const midPriceStr = mids[coin];
-      if (!midPriceStr) throw new Error(`No mid price for ${coin}`);
-      const currentPrice = parseFloat(midPriceStr);
-
-      const rawSize = (amountPerPair * decision.leverage) / currentPrice;
-      const szDecimals = 4;
-      const size = Math.max(0.001, parseFloat(rawSize.toFixed(szDecimals)));
-
-      const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
-      const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
-
-      await setLeverage(pk, coin, decision.leverage, false);
-
-      const sizeStr = size.toString();
-      const priceStr = currentPrice.toString();
-
-      if (tradeMode === 'limit') {
-        await placeLimitOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
-      } else {
-        await placeMarketOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
-      }
-
-      const ordersResponse = await (await import('./hyperliquidService')).getUserOpenPositions(wallet.address);
-      const match = ordersResponse.find(
-        (p: any) => p.coin === coin && parseFloat(p.szi) > 0 === (decision.direction === 'LONG')
+    if (totalNeeded > hlBalance) {
+      throw new Error(
+        `Insufficient Hyperliquid balance. Need ${totalNeeded.toFixed(2)} USDC, ` +
+        `only ${hlBalance.toFixed(2)} USDC available.`
       );
-
-      results.push({
-        chatId,
-        messageId: 0,
-        symbol: decision.symbol,
-        direction: decision.direction,
-        allocatedAmount: amountPerPair,
-        entryPrice: match ? parseFloat(match.entryPx) : currentPrice,
-        stopLoss: decision.stopLoss,
-        targetProfit: decision.targetProfit,
-        leverage: decision.leverage,
-        strategyName: decision.strategyName,
-        timerExpiresAt: null,
-        partialTpHit: false,
-        accountMode: 'real',
-      });
-    } catch (err) {
-      console.error(`[RealTrade HL] Failed to execute ${decision.symbol}:`, err);
-      throw new Error(`Failed to execute ${decision.symbol}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-  }
 
-  return results;
+    const existingPositions = await getUserPositions(chatId);
+    const takenSymbols = new Set(existingPositions.map(p => p.symbol));
+
+    try {
+      const hlOpen = await getHlOpenPositions(wallet.address);
+      for (const hlPos of hlOpen) {
+        const szi = parseFloat(hlPos.szi);
+        if (!isNaN(szi) && szi !== 0) {
+          takenSymbols.add(hlToSymbol(hlPos.coin));
+        }
+      }
+    } catch (err) {
+      console.error('[RealTrade HL] Could not fetch open HL positions for dedupe:', err);
+    }
+
+    const decisions = await runHlMarketSweepTopN(count + takenSymbols.size);
+
+    const freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
+
+    if (freshDecisions.length === 0) {
+      throw new Error('No new coin pairs available to trade.');
+    }
+
+    const results: ActivePosition[] = [];
+    const mids = await getAllMids();
+
+    let failed = 0;
+
+    for (const decision of freshDecisions) {
+      try {
+        const coin = toHlCoin(decision.symbol);
+        const midPriceStr = mids[coin];
+        if (!midPriceStr) throw new Error(`No mid price for ${coin}`);
+        const currentPrice = parseFloat(midPriceStr);
+
+        const rawSize = (amountPerPair * decision.leverage) / currentPrice;
+
+        const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
+        const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
+
+        await setLeverage(pk, coin, decision.leverage, false);
+
+        const sizeStr = rawSize.toString();
+        const priceStr = currentPrice.toString();
+
+        if (tradeMode === 'limit') {
+          await placeLimitOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
+        } else {
+          await placeMarketOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
+        }
+
+        const ordersResponse = await getHlOpenPositions(wallet.address);
+        const match = ordersResponse.find(
+          (p: any) => p.coin === coin && parseFloat(p.szi) > 0 === (decision.direction === 'LONG')
+        );
+
+        if (!match) {
+          throw new Error(
+            `No position found on Hyperliquid after ordering ${coin} — order did not fill, skipping.`
+          );
+        }
+
+        const position: ActivePosition = {
+          chatId,
+          messageId: 0,
+          symbol: decision.symbol,
+          direction: decision.direction,
+          allocatedAmount: amountPerPair,
+          entryPrice: parseFloat(match.entryPx),
+          stopLoss: decision.stopLoss,
+          targetProfit: decision.targetProfit,
+          leverage: decision.leverage,
+          strategyName: decision.strategyName,
+          timerExpiresAt: null,
+          partialTpHit: false,
+          accountMode: 'real',
+        };
+
+        await savePosition(position);
+        results.push(position);
+      } catch (err) {
+        failed++;
+        console.error(`[RealTrade HL] Failed to execute ${decision.symbol}:`, err);
+      }
+    }
+
+    if (results.length === 0 && failed > 0) {
+      throw new Error(`All ${failed} trade execution(s) failed. No positions opened.`);
+    }
+
+    return results;
+  });
 }
 
 export async function autoStartTrade(
@@ -378,14 +443,14 @@ async function closePositionById(
         const hlPos = hlPositions.find((p: any) => p.coin === coin);
 
         if (hlPos) {
-          const size = parseFloat(hlPos.szi);
-          const isLong = size > 0;
+          const sizeNum = parseFloat(hlPos.szi);
+          const isLong = sizeNum > 0;
           const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
           const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
           const currentPrice = await getCoinPrice(coin);
-          const closeSize = Math.abs(size).toFixed(4);
+          const closeSize = Math.abs(sizeNum).toString();
 
-          await closeHlPosition(pk, coin, closeSize, currentPrice.toString());
+          await closeHlPosition(pk, coin, closeSize, currentPrice.toString(), isLong);
 
           exitPrice = exitPrice || currentPrice;
           actualPnl = parseFloat(hlPos.unrealizedPnl);
@@ -399,6 +464,16 @@ async function closePositionById(
   const user = await getUser(chatId);
   if (!user) {
     throw new Error('User not found.');
+  }
+
+  if (!exitPrice) {
+    if (position.accountMode === 'real') {
+      try {
+        exitPrice = await getCoinPrice(toHlCoin(position.symbol));
+      } catch (err) {
+        console.error('[Close] HL price lookup failed:', err);
+      }
+    }
   }
 
   if (!exitPrice) {
