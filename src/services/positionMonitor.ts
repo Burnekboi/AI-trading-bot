@@ -5,6 +5,7 @@ import { getCurrentPrice } from '../mexc/client';
 import { getCoinPrice as getHlPrice } from './hyperliquidService';
 import {
   closePositionByMessage,
+  closePartialRealPosition,
   isStopLossHit,
   isTakeProfitHit,
   isPartialTpTriggered,
@@ -79,11 +80,16 @@ async function runMonitorTick(bot: Telegraf): Promise<void> {
           );
 
           if (partialTpTriggered) {
-            if (position.accountMode !== 'real') {
+            // Realize the 1st TP:
+            // - real: close half of the position on Hyperliquid
+            // - sim: credit allocatedAmount (margin-half + profit-half) to balance
+            if (position.accountMode === 'real') {
+              await closePartialRealPosition(position);
+            } else {
               const user = await getUser(position.chatId);
               if (user) {
-                const realizedPnl = position.allocatedAmount;
-                const newBalance = user.usdtBalance + realizedPnl;
+                const realized = position.allocatedAmount;
+                const newBalance = user.usdtBalance + realized;
                 await updateUserBalance(position.chatId, newBalance);
               }
             }
@@ -108,7 +114,7 @@ async function runMonitorTick(bot: Telegraf): Promise<void> {
               targetProfit: position.targetProfit,
               allocatedAmount: position.allocatedAmount,
               closingStatus: 'Ended',
-              pnlUsdt: position.allocatedAmount,
+              pnlUsdt: position.allocatedAmount / 2,
               wasProfitable: true,
             }).catch((err) => {
               console.error('logPerformance for 1st TP failed (non-fatal):', err);

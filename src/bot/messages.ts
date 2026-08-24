@@ -249,8 +249,10 @@ export function buildClosedPositionText(
         : '';
 
   const partialTpLine = position.partialTpHit
-    ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT realized)\n`
+    ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT taken out)\n`
     : '';
+
+  const pnlLabel = position.partialTpHit ? ' (PnL since 1st TP)' : ' (PnL)';
 
   return (
     `${emoji} <b>${position.direction}</b>\n` +
@@ -261,7 +263,7 @@ export function buildClosedPositionText(
     (slOrTpLine ? `${slOrTpLine}\n` : '') +
     partialTpLine +
     `${statusEmoji} STATUS: ${statusText}\n` +
-    `💵 ${formatPnl(result.pnlUsdt)} (PnL)\n` +
+    `💵 ${formatPnl(result.pnlUsdt)}${pnlLabel}\n` +
     `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`
   );
 }

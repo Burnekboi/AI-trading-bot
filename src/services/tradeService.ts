@@ -371,6 +371,41 @@ export async function savePosition(position: ActivePosition): Promise<void> {
   await createPosition(position);
 }
 
+export async function closePartialRealPosition(
+  position: ActivePosition
+): Promise<boolean> {
+  try {
+    const wallet = await (await import('../db/repositories/wallets')).getWallet(position.chatId);
+    if (!wallet?.privateKey) return false;
+
+    const coin = toHlCoin(position.symbol);
+    const hlPositions = await getHlOpenPositions(wallet.address);
+    const hlPos = hlPositions.find((p: any) => p.coin === coin);
+    if (!hlPos) return false;
+
+    const sizeNum = parseFloat(hlPos.szi);
+    if (!Number.isFinite(sizeNum) || sizeNum === 0) return false;
+
+    const isLong = sizeNum > 0;
+    const halfSize = (Math.abs(sizeNum) / 2).toString();
+
+    const price = await getCoinPrice(coin);
+    if (!price || price <= 0) return false;
+
+    const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
+    const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
+
+    await closeHlPosition(pk, coin, halfSize, price.toString(), isLong);
+    console.log(
+      `[PartialTP HL] Closed half of ${position.symbol} ${position.direction} (${halfSize})`
+    );
+    return true;
+  } catch (err) {
+    console.error('[PartialTP HL] Failed to close half position:', err);
+    return false;
+  }
+}
+
 export async function setPositionMessageId(positionId: number, messageId: number): Promise<void> {
   await updatePositionMessageId(positionId, messageId);
 }
@@ -480,15 +515,33 @@ async function closePositionById(
     exitPrice = await getCurrentPrice(position.symbol);
   }
 
-  const pnlUsdt = position.accountMode === 'real' && actualPnl !== 0
-    ? actualPnl
-    : calculatePnl(
-        position.direction,
-        position.entryPrice,
-        exitPrice,
-        position.allocatedAmount,
-        position.leverage
-      );
+  let pnlUsdt: number;
+
+  if (position.accountMode === 'real' && actualPnl !== 0) {
+    // Exchange truth: unrealizedPnl of the remaining (post-1st-TP) position.
+    pnlUsdt = actualPnl;
+  } else if (position.partialTpHit) {
+    // 1st TP already paid out allocatedAmount (margin-half + profit-half).
+    // Settle only the remaining half's movement beyond the trigger level,
+    // floored at the loss the remaining margin can absorb.
+    const legAllocated = position.allocatedAmount / 2;
+    const legPnl = calculatePnl(
+      position.direction,
+      position.entryPrice,
+      exitPrice,
+      legAllocated,
+      position.leverage
+    );
+    pnlUsdt = Math.max(legPnl - legAllocated, -legAllocated);
+  } else {
+    pnlUsdt = calculatePnl(
+      position.direction,
+      position.entryPrice,
+      exitPrice,
+      position.allocatedAmount,
+      position.leverage
+    );
+  }
 
   try {
     await recordTradeOutcome({
