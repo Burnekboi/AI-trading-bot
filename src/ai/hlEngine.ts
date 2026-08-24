@@ -100,23 +100,23 @@ async function getLearnedAdjustments(
   if (winRate > 0.6) {
     slMultiplier = 0.8;
     tpMultiplier = 1.3;
-    levAdjust += 2;
+    levAdjust += 8;
   } else if (winRate < 0.4) {
     slMultiplier = 1.3;
     tpMultiplier = 0.7;
-    levAdjust -= 2;
+    levAdjust -= 8;
   }
 
   if (penalty.consecutiveLosses >= 2) {
     const factor = 1 + penalty.consecutiveLosses * 0.1;
     slMultiplier *= factor;
-    levAdjust -= penalty.consecutiveLosses;
+    levAdjust -= penalty.consecutiveLosses * 3;
   }
 
   return {
     slMultiplier: Math.min(2, slMultiplier),
     tpMultiplier: Math.max(0.5, tpMultiplier),
-    levAdjust: Math.max(-8, Math.min(6, levAdjust)),
+    levAdjust: Math.max(-40, Math.min(30, levAdjust)),
   };
 }
 
@@ -189,14 +189,14 @@ async function scoreCandidate(
   );
   let stopLoss: number | null = rawSL;
 
-  let leverage = 10;
-  if (volatility < 1.5) leverage += 3;
-  if (volatility > 3) leverage -= 2;
-  if (volatility > 5) leverage -= 3;
-  if (adx > 28) leverage += 3;
-  if (adx > 40) leverage += 2;
-  if (rsi1h > 70 || rsi1h < 30) leverage += 2;
-  leverage = Math.max(3, Math.min(20, leverage + learning.levAdjust));
+  let leverage = 25;
+  if (volatility < 1.5) leverage += 10;
+  if (volatility > 3) leverage -= 8;
+  if (volatility > 5) leverage -= 12;
+  if (adx > 28) leverage += 12;
+  if (adx > 40) leverage += 8;
+  if (rsi1h > 70 || rsi1h < 30) leverage += 8;
+  leverage = Math.max(15, Math.min(100, leverage + learning.levAdjust));
 
   if (learning.levAdjust !== 0) {
     reasons.push(`learn adj`);

@@ -21,6 +21,7 @@ import {
   setLeverage,
   closePosition as closeHlPosition,
   getCoinPrice,
+  getCoinMeta,
   symbolToHl,
   hlToSymbol,
   getAllMids,
@@ -285,12 +286,18 @@ export async function executeRealMultipleTrades(
         if (!midPriceStr) throw new Error(`No mid price for ${coin}`);
         const currentPrice = parseFloat(midPriceStr);
 
-        const rawSize = (amountPerPair * decision.leverage) / currentPrice;
+        // Hyperliquid caps leverage per asset (BTC 40x, most alts 20-50x).
+        // Clamp the AI's choice to the exchange limit so orders don't reject.
+        const meta = await getCoinMeta(coin);
+        const maxLev = meta?.maxLeverage ?? 20;
+        const effectiveLeverage = Math.min(decision.leverage, maxLev);
+
+        const rawSize = (amountPerPair * effectiveLeverage) / currentPrice;
 
         const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
         const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
 
-        await setLeverage(pk, coin, decision.leverage, false);
+        await setLeverage(pk, coin, effectiveLeverage, false);
 
         const sizeStr = rawSize.toString();
         const priceStr = currentPrice.toString();
@@ -321,7 +328,7 @@ export async function executeRealMultipleTrades(
           entryPrice: parseFloat(match.entryPx),
           stopLoss: decision.stopLoss,
           targetProfit: decision.targetProfit,
-          leverage: decision.leverage,
+          leverage: effectiveLeverage,
           strategyName: decision.strategyName,
           timerExpiresAt: null,
           partialTpHit: false,
