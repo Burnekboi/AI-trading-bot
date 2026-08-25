@@ -430,5 +430,98 @@ export async function generateAndApproveAgent(
     agentName,
   });
 
-  return { apiAddress, apiPrivateKey };
+  return { apiAddress: apiAddress, apiPrivateKey: apiPrivateKey };
+}
+
+// ── Arbitrum → Hyperliquid deposits ─────────────────────────────────────────
+// Sending native USDC on Arbitrum One to the official bridge credits the
+// SENDING address's Hyperliquid account (<1 min). Min deposit: 5 USDC.
+const ARBITRUM_RPC = 'https://arb1.arbitrum.io/rpc';
+export const HL_ARBITRUM_BRIDGE = '0x2df1c51e09aecf9cacb7bc98cb1742757f163df7';
+export const HL_DEPOSIT_MIN_USDC = 5;
+const ARB_NATIVE_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+
+let arbProvider: ethers.JsonRpcProvider | null = null;
+
+function getArbProvider(): ethers.JsonRpcProvider {
+  if (!arbProvider) arbProvider = new ethers.JsonRpcProvider(ARBITRUM_RPC);
+  return arbProvider;
+}
+
+export async function getArbitrumBalances(
+  address: string
+): Promise<{ usdc: number; eth: number }> {
+  const provider = getArbProvider();
+  const usdc = new ethers.Contract(
+    ARB_NATIVE_USDC,
+    ['function balanceOf(address owner) view returns (uint256)'],
+    provider
+  );
+  const [usdcRaw, ethRaw] = await Promise.all([
+    usdc.balanceOf(address) as Promise<bigint>,
+    provider.getBalance(address),
+  ]);
+  return {
+    usdc: Number(ethers.formatUnits(usdcRaw, 6)),
+    eth: Number(ethers.formatEther(ethRaw)),
+  };
+}
+
+export async function depositUsdcToHyperliquid(
+  privateKey: string,
+  amountUsdc: number
+): Promise<string> {
+  if (amountUsdc < HL_DEPOSIT_MIN_USDC) {
+    throw new Error(
+      `Minimum deposit is ${HL_DEPOSIT_MIN_USDC} USDC. Smaller amounts are lost forever.`
+    );
+  }
+
+  const pk = privateKey.startsWith('0x') ? privateKey : '0x' + privateKey;
+  const signer = new ethers.Wallet(pk, getArbProvider());
+
+  const usdc = new ethers.Contract(
+    ARB_NATIVE_USDC,
+    ['function transfer(address to, uint256 amount) returns (bool)'],
+    signer
+  );
+
+  const amountWei = BigInt(Math.round(amountUsdc * 1e6));
+
+  // Ensure gas money exists before attempting (transfer costs ~50-100k gas).
+  const feeData = await getArbProvider().getFeeData();
+  const gasLimit = await getArbProvider().estimateGas({
+    from: await signer.getAddress(),
+    to: ARB_NATIVE_USDC,
+    data: usdc.interface.encodeFunctionData('transfer', [HL_ARBITRUM_BRIDGE, amountWei]),
+  });
+  const gasCost = (feeData.gasPrice ?? 0n) * gasLimit;
+  const ethBalance = await getArbProvider().getBalance(await signer.getAddress());
+  if (ethBalance < gasCost) {
+    throw new Error(
+      'Not enough ETH on Arbitrum for gas. Send ~$0.10 worth of ETH to your wallet on the Arbitrum One network first.'
+    );
+  }
+
+  const tx = await usdc.transfer(HL_ARBITRUM_BRIDGE, amountWei);
+  await tx.wait();
+  return tx.hash;
+}
+
+export async function waitForHlCredit(
+  address: string,
+  previousBalance: number,
+  timeoutMs = 150000
+): Promise<number | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const bal = await getUserUsdcBalance(address);
+      if (bal > previousBalance + 0.01) return bal;
+    } catch {
+      // transient API errors — keep polling until deadline
+    }
+  }
+  return null;
 }

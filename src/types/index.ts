@@ -12,6 +12,7 @@ export type UserStep =
   | 'awaiting_view_main_wallet_pin'
   | 'awaiting_real_trade_amount'
   | 'awaiting_real_pair_count'
+  | 'awaiting_deposit_amount'
   | null;
 
 export type TradeMode = 'market' | 'limit';

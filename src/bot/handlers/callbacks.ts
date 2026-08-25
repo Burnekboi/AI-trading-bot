@@ -39,6 +39,7 @@ import {
   buildMainWalletStatusText,
   buildRealDashboardText,
   buildStatsText,
+  PROMPT_DEPOSIT_AMOUNT,
 } from '../messages';
 import {
   activityKeyboard,
@@ -54,7 +55,13 @@ import {
 } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
 import { getWalletBalances } from '../../services/balanceService';
-import { getUserUsdcBalance } from '../../services/hyperliquidService';
+import {
+  getUserUsdcBalance,
+  depositUsdcToHyperliquid,
+  getArbitrumBalances,
+  waitForHlCredit,
+  HL_DEPOSIT_MIN_USDC,
+} from '../../services/hyperliquidService';
 import type { AccountMode, UserProfile } from '../../types';
 
 async function deletePromptMessages(
@@ -423,6 +430,16 @@ export function registerTextInputHandler(bot: Telegraf<Context>): void {
 
       case 'awaiting_real_pair_count': {
         await processRealPairCount(ctx, chatId, text);
+        break;
+      }
+
+      case 'awaiting_deposit_amount': {
+        const amount = parseAmount(text);
+        if (!amount) {
+          await ctx.reply('Invalid amount. Enter a positive number (e.g., 100).');
+          return;
+        }
+        await processDepositAmount(ctx, chatId, amount);
         break;
       }
 
@@ -838,6 +855,88 @@ async function showDashboard(ctx: Context, user: UserProfile, hasPositions: bool
   }
 }
 
+async function processDepositAmount(ctx: Context, chatId: number, amount: number): Promise<void> {
+  const wallet = await getWallet(chatId);
+  if (!wallet) {
+    await setUserStep(chatId, null);
+    await ctx.reply('Create or import a wallet first.');
+    return;
+  }
+
+  if (amount < HL_DEPOSIT_MIN_USDC) {
+    await ctx.reply(
+      `❌ Minimum deposit is ${HL_DEPOSIT_MIN_USDC} USDC — the bridge loses smaller amounts forever. Enter a bigger amount:`
+    );
+    return;
+  }
+
+  let arb;
+  try {
+    arb = await getArbitrumBalances(wallet.address);
+  } catch (err) {
+    console.error('[Deposit] Arbitrum balance fetch failed:', err);
+    await ctx.reply('⚠️ Could not reach Arbitrum RPC. Try again in a minute.');
+    return;
+  }
+
+  if (arb.usdc < amount) {
+    await ctx.reply(
+      `❌ Wallet only has ${arb.usdc.toFixed(2)} USDC on Arbitrum.\n\n` +
+      `Send USDC (network: <b>Arbitrum One</b>) to:\n<code>${wallet.address}</code>`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+  if (arb.eth < 0.00005) {
+    await ctx.reply(
+      `❌ No ETH for gas on Arbitrum.\n\n` +
+      `Send a little ETH (~$0.10, network: <b>Arbitrum One</b>) to:\n<code>${wallet.address}</code>`,
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  const hlBefore = await getUserUsdcBalance(wallet.address).catch(() => 0);
+
+  const statusMsg = await ctx.reply(`⏳ Depositing ${amount} USDC to Hyperliquid...`);
+
+  try {
+    const txHash = await depositUsdcToHyperliquid(wallet.privateKey, amount);
+
+    await ctx.telegram.editMessageText(
+      chatId,
+      statusMsg.message_id,
+      undefined,
+      '✅ Confirmed on Arbitrum.\n⏳ Waiting for Hyperliquid credit (~1 min)...'
+    );
+
+    const credited = await waitForHlCredit(wallet.address, hlBefore);
+
+    await setUserStep(chatId, null);
+
+    if (credited !== null) {
+      await ctx.reply(
+        `💰 <b>Deposit complete!</b>\n\n` +
+        `💵 Deposited: <b>${amount.toFixed(2)} USDC</b>\n` +
+        `💳 HL balance: <b>${credited.toFixed(2)} USDC</b>\n` +
+        `🔗 https://arbiscan.io/tx/${txHash}`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+    } else {
+      await ctx.reply(
+        `✅ Transaction confirmed on-chain. Credit is slower than usual but will appear automatically — check your dashboard in a few minutes.\n` +
+        `🔗 https://arbiscan.io/tx/${txHash}`,
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } }
+      );
+    }
+  } catch (err) {
+    console.error('[Deposit] failed:', err);
+    await setUserStep(chatId, null);
+    const reason = err instanceof Error ? err.message : 'Unknown error';
+    await ctx.reply(`❌ Deposit failed: ${reason}\nYour USDC was not moved.`);
+  }
+}
+
 async function switchMode(ctx: Context, chatId: number, mode: AccountMode): Promise<void> {
   await ctx.answerCbQuery();
   const user = await getUser(chatId);
@@ -882,6 +981,25 @@ export function registerModeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     await switchMode(ctx, chatId, 'real');
+  });
+
+  bot.action('real_deposit', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+      await ctx.reply('Create or import a wallet first.');
+      return;
+    }
+
+    await setUserStep(chatId, 'awaiting_deposit_amount');
+    const msg = await ctx.reply(PROMPT_DEPOSIT_AMOUNT, {
+      parse_mode: 'HTML',
+      ...backKeyboard(),
+    });
+    addPromptMessage(chatId, msg.message_id);
   });
 }
 

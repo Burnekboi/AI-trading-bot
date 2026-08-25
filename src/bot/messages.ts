@@ -137,25 +137,26 @@ export function buildRealMoneyGuideText(): string {
     `• <a href="https://metamask.io">MetaMask</a> (free browser extension)\n` +
     `• <a href="https://app.hyperliquid.xyz">Hyperliquid</a> account\n\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
-    `<b>Step 1 — Get USDC into your wallet</b>\n\n` +
+    `<b>Step 1 — Fund your bot wallet (Arbitrum One)</b>\n\n` +
     `<b>If you CREATED a wallet in the bot:</b>\n` +
     `1. Buy USDC on <a href="https://www.binance.com">Binance</a> / CEX\n` +
     `2. Withdraw to your bot wallet address below\n` +
     `   Network: <b>Arbitrum One</b> (gas ~$0.01)\n` +
-    `3. <a href="https://metamask.io">Install MetaMask</a> → import wallet PK:\n` +
-    `   Wallet Status → VIEW MAIN WALLET →\n` +
-    `   copy private key → import in MetaMask\n\n` +
+    `3. Also send <b>~$0.10 of ETH</b> on Arbitrum One\n` +
+    `   (needed for deposit gas)\n` +
+    `4. Optionally import the private key into\n` +
+    `   <a href="https://metamask.io">MetaMask</a> just to watch funds\n\n` +
     `<b>If you IMPORTED an existing MetaMask wallet:</b>\n` +
-    `• Your wallet is already in <a href="https://metamask.io">MetaMask</a>\n` +
     `• Buy USDC on CEX → withdraw to your\n` +
-    `  MetaMask address on Arbitrum One\n\n` +
+    `  MetaMask address on Arbitrum One + small ETH for gas\n\n` +
+    `⚠️ Use <b>native USDC only</b>. Minimum 5 USDC per deposit.\n\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
-    `<b>Step 2 — Deposit to Hyperliquid</b>\n\n` +
-    `1. Go to <a href="https://app.hyperliquid.xyz">app.hyperliquid.xyz</a>\n` +
-    `2. Connect your MetaMask (Arbitrum network)\n` +
-    `3. Click Deposit → choose Arbitrum\n` +
-    `4. Enter 10-15 USDC → confirm (~$0.01 gas)\n` +
-    `5. Wait ~1 min for confirmation\n\n` +
+    `<b>Step 2 — Deposit via the bot (automatic)</b>\n\n` +
+    `1. Go back to the bot dashboard\n` +
+    `2. Tap <b>💰 DEPOSIT TO HL</b>\n` +
+    `3. Enter amount → bot sends USDC from your\n` +
+    `   wallet directly to Hyperliquid's bridge\n` +
+    `4. Credited in ~1 minute. No MetaMask needed.\n\n` +
     `━━━━━━━━━━━━━━━━━━\n\n` +
     `<b>Step 3 — Set up API Wallet</b>\n\n` +
     `1. Go back to the bot dashboard\n` +
@@ -284,6 +285,11 @@ export const PROMPT_LIMIT_DURATION =
 
 export const PROMPT_LIMIT_AMOUNT =
   '💰 Enter the virtual USDT amount for your limit trade (e.g., 20):';
+
+export const PROMPT_DEPOSIT_AMOUNT =
+  `💰 <b>Deposit to Hyperliquid</b>\n\n` +
+  `Send USDC from your bot wallet's Arbitrum balance straight into your Hyperliquid trading account.\n\n` +
+  `Enter the amount of USDC to deposit (min 5, e.g., 100):`;
 
 export function buildActivityText(
   openCount: number,
