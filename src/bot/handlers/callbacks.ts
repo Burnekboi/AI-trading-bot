@@ -782,10 +782,23 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
 async function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): Promise<void> {
   try {
     if (user.accountMode === 'real') {
-      const wallet = await getWallet(user.chatId);
-      const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-      const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
-      const text = buildRealDashboardText(wallet, balances, hlBalance);
+      const wallet = await getWallet(user.chatId).catch((err) => {
+        console.error('[showDashboard] wallet fetch failed:', err);
+        return undefined;
+      });
+      let balances;
+      let hlBalance: number | undefined;
+      if (wallet) {
+        balances = await getWalletBalances(wallet.address).catch((err) => {
+          console.error('[showDashboard] chain balance fetch failed:', err);
+          return undefined;
+        });
+        hlBalance = await getUserUsdcBalance(wallet.address).catch((err) => {
+          console.error('[showDashboard] HL balance fetch failed:', err);
+          return undefined;
+        });
+      }
+      const text = buildRealDashboardText(wallet ?? null, balances, hlBalance);
 
       if (ctx.callbackQuery?.message) {
         await ctx.editMessageText(text, {
