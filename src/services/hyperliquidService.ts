@@ -245,8 +245,16 @@ export async function setLeverage(
   isCross: boolean = false
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
+  // updateLeverage expects the numeric asset index, not the coin name string.
+  // The /meta universe is ordered by asset index, so the array position of the
+  // coin equals its asset index.
+  const meta = await getMeta();
+  const assetIndex = meta.universe.findIndex(u => u.name === coin);
+  if (assetIndex < 0) {
+    throw new Error(`Cannot resolve asset index for ${coin}`);
+  }
   return client.updateLeverage({
-    asset: coin,
+    asset: assetIndex,
     isCross,
     leverage,
   });
@@ -275,7 +283,6 @@ export async function getCoinMeta(coin: string): Promise<HLUniverseItem | null> 
   const item = meta.universe.find(u => u.name === coin);
   return item ?? null;
 }
-
 export function symbolToHl(symbol: string): string {
   return symbol.replace('USDT', '');
 }
