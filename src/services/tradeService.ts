@@ -68,6 +68,25 @@ function pickFreshDecisions(
   return fresh;
 }
 
+// The bot's "win guarantee" stance: on the single highest-confidence signal of
+// a batch, drop the stop-loss so the position is held purely on the AI's
+// conviction. Every other trade keeps its stop-loss + liquidation protection.
+// This is intentionally capped to ONE trade per sweep so no-SL exposure stays
+// bounded (a wrong no-SL call can still be liquidated for the full margin).
+function applyTopConfidenceNoSl(decisions: TradeDecision[]): TradeDecision[] {
+  if (decisions.length === 0) return decisions;
+  const topIndex = decisions.reduce(
+    (bestIdx, d, i, arr) =>
+      (d.exploitabilityScore ?? 0) > (arr[bestIdx].exploitabilityScore ?? 0)
+        ? i
+        : bestIdx,
+    0
+  );
+  return decisions.map((d, i) =>
+    i === topIndex ? { ...d, stopLoss: null } : d
+  );
+}
+
 export function calculatePnl(
   direction: TradeDirection,
   entryPrice: number,
@@ -194,11 +213,13 @@ export async function executeMultipleTrades(
 
     const decisions = await runHlMarketSweepTopN(count + takenSymbols.size);
 
-    const freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
+    let freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
 
     if (freshDecisions.length === 0) {
       throw new Error('No new coin pairs available to trade.');
     }
+
+    freshDecisions = applyTopConfidenceNoSl(freshDecisions);
 
     const results: ActivePosition[] = [];
 
@@ -267,11 +288,13 @@ export async function executeRealMultipleTrades(
 
     const decisions = await runHlMarketSweepTopN(count + takenSymbols.size);
 
-    const freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
+    let freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
 
     if (freshDecisions.length === 0) {
       throw new Error('No new coin pairs available to trade.');
     }
+
+    freshDecisions = applyTopConfidenceNoSl(freshDecisions);
 
     const results: ActivePosition[] = [];
     const mids = await getAllMids();
