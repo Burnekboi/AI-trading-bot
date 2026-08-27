@@ -214,6 +214,7 @@ export async function placeMarketOrder(
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
   const szDecimals = await getSzDecimals(coin);
+  const asset = await getAssetIndex(coin);
 
   const pxNum = applySlippage(parseFloat(price), isBuy);
   const px = formatHlPrice(pxNum, szDecimals);
@@ -227,7 +228,7 @@ export async function placeMarketOrder(
 
   return client.order({
     orders: [{
-      a: coin,
+      a: asset,
       b: isBuy,
       p: px,
       s: sz,
@@ -245,16 +246,9 @@ export async function setLeverage(
   isCross: boolean = false
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
-  // updateLeverage expects the numeric asset index, not the coin name string.
-  // The /meta universe is ordered by asset index, so the array position of the
-  // coin equals its asset index.
-  const meta = await getMeta();
-  const assetIndex = meta.universe.findIndex(u => u.name === coin);
-  if (assetIndex < 0) {
-    throw new Error(`Cannot resolve asset index for ${coin}`);
-  }
+  const asset = await getAssetIndex(coin);
   return client.updateLeverage({
-    asset: assetIndex,
+    asset,
     isCross,
     leverage,
   });
@@ -282,6 +276,29 @@ export async function getCoinMeta(coin: string): Promise<HLUniverseItem | null> 
   const meta = await getMeta();
   const item = meta.universe.find(u => u.name === coin);
   return item ?? null;
+}
+
+let metaCache: { universe: HLUniverseItem[] } | null = null;
+let metaCacheAt = 0;
+const META_CACHE_MS = 60_000;
+
+async function getCachedMeta(): Promise<{ universe: HLUniverseItem[] }> {
+  const now = Date.now();
+  if (metaCache && now - metaCacheAt < META_CACHE_MS) return metaCache;
+  const meta = await getMeta();
+  metaCache = meta;
+  metaCacheAt = now;
+  return meta;
+}
+
+// Hyperliquid action fields (order `a`, updateLeverage `asset`) expect the
+// numeric asset index, not the coin name string. The /meta universe is ordered
+// by asset index, so the array position equals the asset index.
+export async function getAssetIndex(coin: string): Promise<number> {
+  const meta = await getCachedMeta();
+  const index = meta.universe.findIndex(u => u.name === coin);
+  if (index < 0) throw new Error(`Cannot resolve asset index for ${coin}`);
+  return index;
 }
 export function symbolToHl(symbol: string): string {
   return symbol.replace('USDT', '');
@@ -394,6 +411,7 @@ export async function placeLimitOrder(
 ): Promise<any> {
   const client = await createExchangeClient(privateKey);
   const szDecimals = await getSzDecimals(coin);
+  const asset = await getAssetIndex(coin);
 
   const px = formatHlPrice(parseFloat(price), szDecimals);
   const sz = formatHlSize(parseFloat(size), szDecimals);
@@ -406,7 +424,7 @@ export async function placeLimitOrder(
 
   return client.order({
     orders: [{
-      a: coin,
+      a: asset,
       b: isBuy,
       p: px,
       s: sz,
