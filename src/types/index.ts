@@ -112,4 +112,5 @@ export interface WalletBalances {
   erc20Usdc: number;
   bep20Usdt: number;
   bep20Usdc: number;
+  arbUsdc: number;
 }

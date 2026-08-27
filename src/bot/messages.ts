@@ -31,7 +31,7 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     );
   }
 
-  const onchainUsdc = (balances?.erc20Usdc ?? 0) + (balances?.bep20Usdc ?? 0);
+  const onchainUsdc = (balances?.erc20Usdc ?? 0) + (balances?.bep20Usdc ?? 0) + (balances?.arbUsdc ?? 0);
   const hl = hlBalance ?? 0;
 
   return (
@@ -40,6 +40,7 @@ export function buildRealDashboardText(wallet: Wallet | null, balances?: WalletB
     `Address: <code>${wallet.address}</code>\n\n` +
     `💰 <b>Balances:</b>\n` +
     `• USDC (on-chain): <b>${onchainUsdc.toFixed(2)}</b>\n` +
+    `• USDC (Arbitrum): <b>${(balances?.arbUsdc ?? 0).toFixed(2)}</b>\n` +
     `• USDC (Hyperliquid): <b>${hl.toFixed(2)}</b>\n\n` +
     (hl >= 10
       ? `✅ Ready to trade`
@@ -72,7 +73,7 @@ export function buildApiWalletStatusText(wallet: Wallet): string {
 
 export function buildMainWalletStatusText(wallet: Wallet, balances: WalletBalances): string {
   const totalUsdt = balances.erc20Usdt + balances.bep20Usdt;
-  const totalUsdc = balances.erc20Usdc + balances.bep20Usdc;
+  const totalUsdc = balances.erc20Usdc + balances.bep20Usdc + balances.arbUsdc;
 
   return (
     `💰 <b>Main Wallet</b>\n\n` +
@@ -80,7 +81,8 @@ export function buildMainWalletStatusText(wallet: Wallet, balances: WalletBalanc
     `Private Key: <code>${wallet.privateKey}</code>\n\n` +
     `💰 <b>Balance:</b>\n` +
     `• USDT: ${totalUsdt.toFixed(2)}\n` +
-    `• USDC: ${totalUsdc.toFixed(2)}`
+    `• USDC (on-chain): ${totalUsdc.toFixed(2)}\n` +
+    `• USDC (Arbitrum): ${balances.arbUsdc.toFixed(2)}`
   );
 }
 
