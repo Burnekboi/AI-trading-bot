@@ -144,23 +144,39 @@ async function scoreCandidate(
   let hasSignal = false;
 
   if (rsi1h > 65 && rsi15m > 60) {
-    score += 40;
-    direction = 'SHORT';
-    strategyName = STRATEGY_REVERSAL;
-    hasSignal = true;
-    reasons.push('overbought RSI (1h+15m)');
+    // Overbought fade is only reliable when the trend is NOT strongly
+    // pushing that direction. Without confirmation it just catches falling
+    // knives. Require the 1h ADX to be weak-to-moderate (< 32).
+    if (adx <= 32) {
+      score += 45;
+      direction = 'SHORT';
+      strategyName = STRATEGY_REVERSAL;
+      hasSignal = true;
+      reasons.push('overbought RSI + weak trend (1h+15m)');
+    } else if (adx > 38) {
+      // Strong uptrend + overbought: momentum likely carries, fade is risky.
+      score -= 30;
+      reasons.push('overbought in strong trend (skip fade)');
+    }
   } else if (rsi1h < 35 && rsi15m < 40) {
-    score += 40;
-    direction = 'LONG';
-    strategyName = STRATEGY_DIP;
-    hasSignal = true;
-    reasons.push('oversold RSI (1h+15m)');
+    if (adx <= 32) {
+      score += 45;
+      direction = 'LONG';
+      strategyName = STRATEGY_DIP;
+      hasSignal = true;
+      reasons.push('oversold RSI + weak trend (1h+15m)');
+    } else if (adx > 38) {
+      score -= 30;
+      reasons.push('oversold in strong trend (skip dip)');
+    }
   } else if (adx > 28) {
-    score += 35;
+    // Breakout: only trade the direction already established. Higher ADX
+    // gives a stronger signal and gets a higher score.
+    score += 30 + Math.min(adx, 50) * 0.4;
     strategyName = STRATEGY_BREAKOUT;
     direction = getTrendDirection(highs, lows, closes);
     hasSignal = true;
-    reasons.push('strong ADX trend');
+    reasons.push(`strong ADX trend (${adx.toFixed(1)})`);
   }
 
   if (!hasSignal) return null;
@@ -170,12 +186,18 @@ async function scoreCandidate(
     reasons.push('choppy flat market');
   }
 
-  if (volatility > 2) {
-    score += 10;
-    reasons.push('elevated volatility');
+  if (volatility > 2.5) {
+    score -= 15;
+    reasons.push('excess volatility');
+  } else if (volatility >= 1.5) {
+    score += 8;
+    reasons.push('healthy volatility');
   }
 
-  score += Math.min(adx, 50) * 0.3;
+  // Extra confirmation for reversals: reward when the price has closed back
+  // through the recent mean (a turn is actually underway), not just stretched
+  // RSI. Without this, momentum keeps running and the fade gets stopped out.
+  score += Math.min(adx, 50) * 0.2;
   score += Math.abs(rsi1h - 50) * 0.4;
 
   const penalty = await getPenaltyMultiplier(strategyName, symbol);
@@ -193,32 +215,89 @@ async function scoreCandidate(
   );
   let stopLoss: number | null = rawSL;
 
-  let leverage = 25;
-  if (volatility < 1.5) leverage += 10;
-  if (volatility > 3) leverage -= 8;
-  if (volatility > 5) leverage -= 12;
-  if (adx > 28) leverage += 12;
-  if (adx > 40) leverage += 8;
-  if (rsi1h > 70 || rsi1h < 30) leverage += 8;
-  leverage = Math.max(15, Math.min(100, leverage + learning.levAdjust));
+  // Conservative leverage: keep the 15x floor but stop pushing toward 100x.
+  // The wider the stop, the lower the leverage, so liquidation always stays
+  // beyond the stop and we never blow up a position.
+  let leverage = 20;
+  if (volatility >= 1.5 && volatility < 3) leverage += 5;
+  if (volatility > 5) leverage -= 6;
+  if (adx > 38) leverage += 5;
+  if (strategyName === STRATEGY_BREAKOUT && adx > 28) leverage += 5;
+  if (stopLoss !== null) {
+    const slDistancePct = (Math.abs(entryPrice - stopLoss) / entryPrice) * 100;
+    if (slDistancePct > 6) leverage = Math.min(leverage, 20);
+    if (slDistancePct > 9) leverage = 15;
+  }
+  leverage = Math.max(15, Math.min(40, leverage + learning.levAdjust));
 
   if (learning.levAdjust !== 0) {
     reasons.push(`learn adj`);
   }
 
   if (stopLoss !== null && leverage > 0) {
+    // Liquidation distance shrinks as leverage rises. At 15-100x it is only
+    // 1-6.7% from entry, while an ATR/swing stop is usually wider. When the
+    // stop would sit *past* liquidation, the position used to run until it was
+    // liquidated (losing the whole margin) because the stop was disabled.
+    // Instead we pull the stop in to sit safely before liquidation with a
+    // buffer, so we always stop out at a predefined loss rather than get
+    // wiped out.
     const liquidationPrice = direction === 'LONG'
       ? entryPrice * (1 - 1 / leverage)
       : entryPrice * (1 + 1 / leverage);
 
-    const unreachable = direction === 'LONG'
-      ? stopLoss < liquidationPrice
-      : stopLoss > liquidationPrice;
+    const liqDistance = direction === 'LONG'
+      ? entryPrice - liquidationPrice
+      : liquidationPrice - entryPrice;
 
-    if (unreachable) {
-      stopLoss = null;
-      reasons.push('no SL (past liq)');
+    // Buffer below the liquidation level: keep the stop this far from liq.
+    const liqBuffer = liqDistance * 0.35;
+
+    let finalSl = stopLoss;
+
+    if (direction === 'LONG' && stopLoss < liquidationPrice + liqBuffer) {
+      finalSl = Math.min(stopLoss, liquidationPrice + liqBuffer);
+    } else if (direction === 'SHORT' && stopLoss > liquidationPrice - liqBuffer) {
+      finalSl = Math.max(stopLoss, liquidationPrice - liqBuffer);
     }
+
+    // If tightening still lands it on the wrong side, drop leverage instead
+    // so the stop has room. Recompute liquidation at a leverage that fits.
+    let iterations = 0;
+    while (
+      finalSl !== null &&
+      iterations < 20
+    ) {
+      const curLiq = direction === 'LONG'
+        ? entryPrice * (1 - 1 / leverage)
+        : entryPrice * (1 + 1 / leverage);
+      if (direction === 'LONG' && finalSl > curLiq) break;
+      if (direction === 'SHORT' && finalSl < curLiq) break;
+
+      const reducedLeverage = Math.max(15, Math.floor(leverage / 2));
+      if (reducedLeverage >= leverage) break;
+      leverage = reducedLeverage;
+      const revisedLiq = direction === 'LONG'
+        ? entryPrice * (1 - 1 / leverage)
+        : entryPrice * (1 + 1 / leverage);
+      const newBuffer = Math.abs(entryPrice - revisedLiq) * 0.35;
+      finalSl = direction === 'LONG'
+        ? Math.min(stopLoss, revisedLiq + newBuffer)
+        : Math.max(stopLoss, revisedLiq - newBuffer);
+      iterations++;
+    }
+
+    // Cap stop distance so risk per trade stays bounded (~12% max move).
+    const maxSlDistance = entryPrice * 0.12;
+    if (direction === 'LONG') {
+      finalSl = Math.max(finalSl, entryPrice - maxSlDistance);
+    } else {
+      finalSl = Math.min(finalSl, entryPrice + maxSlDistance);
+    }
+
+    finalSl = Number(finalSl.toFixed(8));
+    stopLoss = finalSl;
+    reasons.push(`liq buffer @${leverage}x`);
   }
 
   return {
