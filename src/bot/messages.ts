@@ -179,7 +179,7 @@ export function buildWelcomeText(address: string): string {
     `Your wallet has been credited with <b>100.00 USDT</b>.\n` +
     `You are currently in <b>SIMULATION</b> mode.\n` +
     `Address: <code>${address}</code>\n\n` +
-    `Tap the dashboard to start paper trading with real MEXC market data.`
+    `Tap the dashboard to start paper trading with live Hyperliquid market data.`
   );
 }
 
@@ -270,7 +270,7 @@ export function buildClosedPositionText(
 }
 
 export const AI_SCANNING_TEXT =
-  '🔍 AI Engine active. Scanning MEXC volume leaders and calculating trade strategies...';
+  '🔍 AI Engine active. Scanning Hyperliquid volume leaders and calculating trade strategies...';
 
 export function promptTradeAmount(available: number): string {
   return (

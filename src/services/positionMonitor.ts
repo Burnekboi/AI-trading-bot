@@ -1,7 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import { getAllActivePositions } from '../db/repositories/positions';
-import { getCurrentPrice } from '../mexc/client';
 import { getCoinPrice as getHlPrice } from './hyperliquidService';
 import {
   closePositionByMessage,
@@ -57,9 +56,7 @@ async function runMonitorTick(bot: Telegraf): Promise<void> {
   for (const position of positions) {
     try {
         const now = Date.now();
-        const currentPrice = position.accountMode === 'real'
-          ? await getHlPrice(coinFromSymbol(position.symbol))
-          : await getCurrentPrice(position.symbol);
+        const currentPrice = await getHlPrice(coinFromSymbol(position.symbol));
 
         if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
           console.warn(

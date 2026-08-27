@@ -1,5 +1,4 @@
 import { ethers } from 'ethers';
-import { runMarketSweepTopN } from '../ai/engine';
 import { runHlMarketSweepTopN } from '../ai/hlEngine';
 import { recordTradeOutcome } from '../ai/modelState';
 import {
@@ -193,7 +192,7 @@ export async function executeMultipleTrades(
     const existingPositions = await getUserPositions(chatId);
     const takenSymbols = new Set(existingPositions.map(p => p.symbol));
 
-    const decisions = await runMarketSweepTopN(count + takenSymbols.size);
+    const decisions = await runHlMarketSweepTopN(count + takenSymbols.size);
 
     const freshDecisions = pickFreshDecisions(decisions, takenSymbols, count);
 
@@ -509,12 +508,10 @@ async function closePositionById(
   }
 
   if (!exitPrice) {
-    if (position.accountMode === 'real') {
-      try {
-        exitPrice = await getCoinPrice(toHlCoin(position.symbol));
-      } catch (err) {
-        console.error('[Close] HL price lookup failed:', err);
-      }
+    try {
+      exitPrice = await getCoinPrice(toHlCoin(position.symbol));
+    } catch (err) {
+      console.error('[Close] HL price lookup failed:', err);
     }
   }
 
