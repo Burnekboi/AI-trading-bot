@@ -4,6 +4,8 @@ import type { WalletBalances } from '../types';
 const ETH_RPC = 'https://eth.drpc.org';
 const BSC_RPC = 'https://bsc.drpc.org';
 
+const RPC_TIMEOUT_MS = 12000;
+
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
 ];
@@ -24,12 +26,12 @@ let ethProvider: ethers.JsonRpcProvider | null = null;
 let bscProvider: ethers.JsonRpcProvider | null = null;
 
 function getEthProvider(): ethers.JsonRpcProvider {
-  if (!ethProvider) ethProvider = new ethers.JsonRpcProvider(ETH_RPC);
+  if (!ethProvider) ethProvider = new ethers.JsonRpcProvider(ETH_RPC, undefined, { staticNetwork: true, batchMaxCount: 1, pollingInterval: 1000 });
   return ethProvider;
 }
 
 function getBscProvider(): ethers.JsonRpcProvider {
-  if (!bscProvider) bscProvider = new ethers.JsonRpcProvider(BSC_RPC);
+  if (!bscProvider) bscProvider = new ethers.JsonRpcProvider(BSC_RPC, undefined, { staticNetwork: true, batchMaxCount: 1, pollingInterval: 1000 });
   return bscProvider;
 }
 
@@ -49,12 +51,20 @@ async function getTokenBalance(
 }
 
 export async function getWalletBalances(address: string): Promise<WalletBalances> {
-  const [erc20Usdt, erc20Usdc, bep20Usdt, bep20Usdc] = await Promise.all([
-    getTokenBalance(USDT_ETH, address, getEthProvider()),
-    getTokenBalance(USDC_ETH, address, getEthProvider()),
-    getTokenBalance(USDT_BSC, address, getBscProvider()),
-    getTokenBalance(USDC_BSC, address, getBscProvider()),
-  ]);
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('RPC balance query timed out')), RPC_TIMEOUT_MS)
+  );
 
-  return { erc20Usdt, erc20Usdc, bep20Usdt, bep20Usdc };
+  const work = async (): Promise<WalletBalances> => {
+    const [erc20Usdt, erc20Usdc, bep20Usdt, bep20Usdc] = await Promise.all([
+      getTokenBalance(USDT_ETH, address, getEthProvider()),
+      getTokenBalance(USDC_ETH, address, getEthProvider()),
+      getTokenBalance(USDT_BSC, address, getBscProvider()),
+      getTokenBalance(USDC_BSC, address, getBscProvider()),
+    ]);
+
+    return { erc20Usdt, erc20Usdc, bep20Usdt, bep20Usdc };
+  };
+
+  return Promise.race([work(), timeout]);
 }

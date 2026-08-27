@@ -51,6 +51,7 @@ import {
   modeSelectKeyboard,
   positionKeyboard,
   realDashboardKeyboard,
+  realPromptBackKeyboard,
   statsKeyboard,
 } from '../keyboards';
 import { getUserPerformance } from '../../db/repositories/performance';
@@ -988,18 +989,22 @@ export function registerModeHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const wallet = await getWallet(chatId);
-    if (!wallet) {
-      await ctx.reply('Create or import a wallet first.');
-      return;
-    }
+    try {
+      const wallet = await getWallet(chatId);
+      if (!wallet) {
+        await ctx.reply('Create or import a wallet first.');
+        return;
+      }
 
-    await setUserStep(chatId, 'awaiting_deposit_amount');
-    const msg = await ctx.reply(PROMPT_DEPOSIT_AMOUNT, {
-      parse_mode: 'HTML',
-      ...backKeyboard(),
-    });
-    addPromptMessage(chatId, msg.message_id);
+      await setUserStep(chatId, 'awaiting_deposit_amount');
+      const msg = await ctx.reply(PROMPT_DEPOSIT_AMOUNT, {
+        parse_mode: 'HTML',
+        ...realPromptBackKeyboard(),
+      });
+      addPromptMessage(chatId, msg.message_id);
+    } catch (error) {
+      console.error('[real_deposit error]', error);
+    }
   });
 }
 

@@ -14,9 +14,9 @@ import {
   buildRealMoneyGuideText,
 } from '../messages';
 import {
-  backKeyboard,
   importWalletResultKeyboard,
   realDashboardKeyboard,
+  realPromptBackKeyboard,
   walletStatusKeyboard,
 } from '../keyboards';
 import { getWalletBalances } from '../../services/balanceService';
@@ -33,8 +33,18 @@ export async function showRealDashboard(ctx: Context, chatId: number): Promise<v
     const user = await getUser(chatId);
     if (!user) return;
     const wallet = await getWallet(chatId);
-    const balances = wallet ? await getWalletBalances(wallet.address) : undefined;
-    const hlBalance = wallet ? await getUserUsdcBalance(wallet.address) : undefined;
+    let balances;
+    let hlBalance: number | undefined;
+    if (wallet) {
+      balances = await getWalletBalances(wallet.address).catch((err) => {
+        console.error('[showRealDashboard] chain balance fetch failed:', err);
+        return undefined;
+      });
+      hlBalance = await getUserUsdcBalance(wallet.address).catch((err) => {
+        console.error('[showRealDashboard] HL balance fetch failed:', err);
+        return undefined;
+      });
+    }
     const text = buildRealDashboardText(wallet, balances, hlBalance);
 
     if (ctx.callbackQuery?.message) {
@@ -134,8 +144,18 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const { startTradeFlow } = await import('./trade');
-    await startTradeFlow(ctx, chatId, 'real');
+    try {
+      const { startTradeFlow } = await import('./trade');
+      await startTradeFlow(ctx, chatId, 'real');
+    } catch (error) {
+      console.error('[start_trading_real error]', error);
+      await ctx
+        .editMessageText('⚠️ Something went wrong. Please try again.', {
+          parse_mode: 'HTML',
+          ...realDashboardKeyboard(true),
+        })
+        .catch(() => {});
+    }
   });
 
   bot.action('wallet_status', async (ctx) => {
@@ -143,28 +163,38 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const wallet = await getWallet(chatId);
-    if (!wallet) {
-      await showRealDashboard(ctx, chatId);
-      return;
-    }
+    try {
+      const wallet = await getWallet(chatId);
+      if (!wallet) {
+        await showRealDashboard(ctx, chatId);
+        return;
+      }
 
-    clearSession(chatId);
-    await setUserStep(chatId, null);
+      clearSession(chatId);
+      await setUserStep(chatId, null);
 
-    const text = buildApiWalletStatusText(wallet);
-    const hasApi = !!wallet.apiWalletPrivateKey;
+      const text = buildApiWalletStatusText(wallet);
+      const hasApi = !!wallet.apiWalletPrivateKey;
 
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...walletStatusKeyboard(hasApi),
-      });
-    } else {
-      await ctx.reply(text, {
-        parse_mode: 'HTML',
-        ...walletStatusKeyboard(hasApi),
-      });
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...walletStatusKeyboard(hasApi),
+        });
+      } else {
+        await ctx.reply(text, {
+          parse_mode: 'HTML',
+          ...walletStatusKeyboard(hasApi),
+        });
+      }
+    } catch (error) {
+      console.error('[wallet_status error]', error);
+      await ctx
+        .editMessageText('⚠️ Could not load wallet status. Try again.', {
+          parse_mode: 'HTML',
+          ...realDashboardKeyboard(true),
+        })
+        .catch(() => {});
     }
   });
 
@@ -190,20 +220,24 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const wallet = await getWallet(chatId);
-    if (!wallet) {
-      await showRealDashboard(ctx, chatId);
-      return;
-    }
+    try {
+      const wallet = await getWallet(chatId);
+      if (!wallet) {
+        await showRealDashboard(ctx, chatId);
+        return;
+      }
 
-    const text = buildApiWalletStatusText(wallet);
-    const hasApi = !!wallet.apiWalletPrivateKey;
+      const text = buildApiWalletStatusText(wallet);
+      const hasApi = !!wallet.apiWalletPrivateKey;
 
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        ...walletStatusKeyboard(hasApi),
-      });
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          ...walletStatusKeyboard(hasApi),
+        });
+      }
+    } catch (error) {
+      console.error('[back_to_wallet_status error]', error);
     }
   });
 
@@ -263,6 +297,7 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
   });
 
   bot.action('wallet_status_back', async (ctx) => {
+    await ctx.answerCbQuery();
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     clearSession(chatId);
@@ -277,18 +312,22 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
 
     const text = buildRealMoneyGuideText();
 
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...backKeyboard(),
-      });
-    } else {
-      await ctx.reply(text, {
-        parse_mode: 'HTML',
-        link_preview_options: { is_disabled: true },
-        ...backKeyboard(),
-      });
+    try {
+      if (ctx.callbackQuery?.message) {
+        await ctx.editMessageText(text, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...realPromptBackKeyboard(),
+        });
+      } else {
+        await ctx.reply(text, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+          ...realPromptBackKeyboard(),
+        });
+      }
+    } catch (error) {
+      console.error('[real_money_guide error]', error);
     }
   });
 
@@ -312,7 +351,17 @@ export function registerWalletHandlers(bot: Telegraf<Context>): void {
     }
   });
 
+  bot.action('real_deposit_back', async (ctx) => {
+    await ctx.answerCbQuery();
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    clearSession(chatId);
+    await setUserStep(chatId, null);
+    await showRealDashboard(ctx, chatId);
+  });
+
   bot.action('import_wallet_back', async (ctx) => {
+    await ctx.answerCbQuery();
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     clearSession(chatId);

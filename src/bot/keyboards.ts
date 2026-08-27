@@ -100,6 +100,11 @@ export const backKeyboard = () =>
   [Markup.button.callback('⬅️ Back', 'back_to_dashboard')],
 ]);
 
+export const realPromptBackKeyboard = () =>
+  Markup.inlineKeyboard([
+  [Markup.button.callback('⬅️ Back', 'real_deposit_back')],
+]);
+
 export const positionKeyboard = (symbol: string) =>
   Markup.inlineKeyboard([
   [
