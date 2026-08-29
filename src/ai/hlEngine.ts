@@ -34,10 +34,19 @@ interface ScoredCandidate {
   direction: TradeDirection;
   strategyName: string;
   leverage: number;
+  availableLeverage: number;
   scoreReason: string;
   stopLoss: number | null;
   targetProfit: number;
 }
+
+// The bot trades at 15x min / 50x max. A pair is only considered when that
+// leverage is actually offered by Hyperliquid, so a candidate that can't take
+// leverage is skipped instead of being cut down (or bumped) to a level it
+// cannot support. The engine keeps the real per-pair available leverage (as
+// reported by the market/meta) so choices reflect what the exchange allows.
+const MIN_LEVERAGE = 15;
+const MAX_LEVERAGE = 50;
 
 function findDynamicSLTP(
   highs: number[],
@@ -131,6 +140,7 @@ async function scoreCandidate(
   highs: number[],
   atr: number,
   closes: number[],
+  availableLeverage: number,
 ): Promise<ScoredCandidate | null> {
   let score = 0;
   let direction: TradeDirection = 'LONG';
@@ -219,7 +229,7 @@ async function scoreCandidate(
     if (slDistancePct > 6) leverage = Math.min(leverage, 20);
     if (slDistancePct > 9) leverage = 15;
   }
-  leverage = Math.max(15, Math.min(40, leverage + learning.levAdjust));
+  leverage = Math.max(MIN_LEVERAGE, Math.min(MAX_LEVERAGE, leverage + learning.levAdjust));
 
   if (learning.levAdjust !== 0) {
     reasons.push(`learn adj`);
@@ -260,7 +270,7 @@ async function scoreCandidate(
       if (direction === 'LONG' && stopLoss > curLiq) break;
       if (direction === 'SHORT' && stopLoss < curLiq) break;
 
-      const reducedLeverage = Math.max(15, Math.floor(leverage / 2));
+      const reducedLeverage = Math.max(MIN_LEVERAGE, Math.floor(leverage / 2));
       if (reducedLeverage >= leverage) break;
       leverage = reducedLeverage;
       const revisedLiq = direction === 'LONG'
@@ -295,6 +305,7 @@ async function scoreCandidate(
     direction,
     strategyName,
     leverage,
+    availableLeverage: Math.min(MAX_LEVERAGE, availableLeverage),
     scoreReason: reasons.join(', ') || 'baseline',
     stopLoss,
     targetProfit,
@@ -324,12 +335,20 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
   const usdtPairs = pairs
     .filter((p) => {
       const base = p.coin;
-      return !STABLECOINS.has(base) && p.dayNtlVlm >= config.minQuoteVolume && !isNaN(p.dayNtlVlm);
+      return (
+        !STABLECOINS.has(base) &&
+        p.dayNtlVlm >= config.minQuoteVolume &&
+        !isNaN(p.dayNtlVlm) &&
+        p.maxLeverage >= MIN_LEVERAGE
+      );
     })
     .sort((a, b) => b.dayNtlVlm - a.dayNtlVlm)
     .slice(0, config.scanTopN);
 
-  console.log(`[HL AI Engine] Top ${usdtPairs.length} HL pairs by volume selected for analysis`);
+  console.log(
+    `[HL AI Engine] Top ${usdtPairs.length} HL pairs by volume selected for analysis ` +
+      `(15x+ leverage available only)`
+  );
 
   const candidates: ScoredCandidate[] = [];
 
@@ -364,6 +383,7 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
         highs,
         ind1h.atr,
         closes,
+        pair.maxLeverage,
       );
 
       return candidate;
@@ -392,7 +412,7 @@ export async function runHlMarketSweep(): Promise<TradeDecision> {
 
   console.log(
     `[HL AI Engine] Selected ${best.symbol} (score=${best.score.toFixed(1)}, ` +
-      `${best.scoreReason}) → ${best.direction} via ${best.strategyName} ${best.leverage}x`
+      `avail=${best.availableLeverage}x, ${best.scoreReason}) → ${best.direction} via ${best.strategyName} ${best.leverage}x`
   );
 
   return convertCandidate(best);
@@ -405,7 +425,7 @@ export async function runHlMarketSweepTopN(n: number): Promise<TradeDecision[]> 
   for (const c of top) {
     console.log(
       `[HL AI Engine] Selected ${c.symbol} (score=${c.score.toFixed(1)}, ` +
-        `${c.scoreReason}) → ${c.direction} via ${c.strategyName} ${c.leverage}x`
+        `avail=${c.availableLeverage}x, ${c.scoreReason}) → ${c.direction} via ${c.strategyName} ${c.leverage}x`
     );
   }
 
