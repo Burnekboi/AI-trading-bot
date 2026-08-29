@@ -40,11 +40,11 @@ interface ScoredCandidate {
   targetProfit: number;
 }
 
-// The bot trades at 15x min / 50x max. A pair is only considered when that
-// leverage is actually offered by Hyperliquid, so a candidate that can't take
-// leverage is skipped instead of being cut down (or bumped) to a level it
-// cannot support. The engine keeps the real per-pair available leverage (as
-// reported by the market/meta) so choices reflect what the exchange allows.
+// The bot trades at 15x min / 50x max — this is the leverage it SETS on a
+// pair. It does not restrict which pairs are traded: a pair with low
+// available leverage (e.g. 3x or 10x) is still a candidate, and at execution
+// the chosen leverage is simply clamped down to what the exchange allows.
+// `availableLeverage` is kept for logging only.
 const MIN_LEVERAGE = 15;
 const MAX_LEVERAGE = 50;
 
@@ -338,16 +338,14 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
       return (
         !STABLECOINS.has(base) &&
         p.dayNtlVlm >= config.minQuoteVolume &&
-        !isNaN(p.dayNtlVlm) &&
-        p.maxLeverage >= MIN_LEVERAGE
+        !isNaN(p.dayNtlVlm)
       );
     })
     .sort((a, b) => b.dayNtlVlm - a.dayNtlVlm)
     .slice(0, config.scanTopN);
 
   console.log(
-    `[HL AI Engine] Top ${usdtPairs.length} HL pairs by volume selected for analysis ` +
-      `(15x+ leverage available only)`
+    `[HL AI Engine] Top ${usdtPairs.length} HL pairs by volume selected for analysis`
   );
 
   const candidates: ScoredCandidate[] = [];
