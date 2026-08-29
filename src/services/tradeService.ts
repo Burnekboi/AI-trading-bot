@@ -25,6 +25,8 @@ import {
   symbolToHl,
   hlToSymbol,
   getAllMids,
+  placeTriggerOrders,
+  cancelTriggerOrdersForCoin,
 } from './hyperliquidService';
 import type {
   AccountMode,
@@ -373,6 +375,39 @@ export async function executeRealMultipleTrades(
 
         await savePosition(position);
         results.push(position);
+
+        try {
+          const liqPrice = getLiquidationPrice(
+            position.direction,
+            position.entryPrice,
+            position.leverage
+          );
+          const placed = await placeTriggerOrders(
+            pk,
+            wallet.address,
+            coin,
+            position.direction === 'LONG',
+            position.entryPrice,
+            Math.abs(parseFloat(match.szi)),
+            position.stopLoss,
+            position.targetProfit,
+            liqPrice
+          );
+          if (placed.placedCount > 0) {
+            console.log(
+              `[RealTrade HL] TP/SL triggers placed for ${coin} (${placed.placedCount} order(s))`
+            );
+          } else {
+            console.warn(
+              `[RealTrade HL] No valid TP/SL levels for ${coin} — exchange-side protection skipped`
+            );
+          }
+        } catch (err) {
+          console.error(
+            `[RealTrade HL] Failed to attach TP/SL triggers for ${coin}:`,
+            err
+          );
+        }
       } catch (err) {
         failed++;
         console.error(`[RealTrade HL] Failed to execute ${decision.symbol}:`, err);
@@ -565,6 +600,17 @@ async function closePositionById(
         throw new Error(`[Close] ${coin} still open on Hyperliquid — position remains open.`);
       }
       actualPnl = 0;
+    }
+
+    // The position is closed (or confirmed gone) — drop any leftover
+    // reduce-only TP/SL triggers so a future position on this coin never
+    // inherits orders sized for the old one.
+    const tradingKey = realWallet.apiWalletPrivateKey ?? realWallet.privateKey;
+    const cancelPk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
+    try {
+      await cancelTriggerOrdersForCoin(cancelPk, realWallet.address, coin);
+    } catch (err) {
+      console.error(`[Close] Could not cancel resting triggers for ${coin}:`, err);
     }
   }
 

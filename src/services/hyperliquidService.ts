@@ -435,6 +435,129 @@ export async function placeLimitOrder(
   });
 }
 
+export interface HlTriggerPlacement {
+  stopLossPoint: number | null;
+  takeProfitPoint: number | null;
+  placedCount: number;
+}
+
+// Cancels every resting reduce-only order on a coin. The bot's TP/SL entries
+// are reduce-only market-on-trigger orders placed with `positionTpsl`
+// grouping, so this reliably targets exactly those (and nothing else the user
+// has resting that is not reduce-only).
+export async function cancelTriggerOrdersForCoin(
+  privateKey: string,
+  address: string,
+  coin: string
+): Promise<void> {
+  await init();
+  const client = await createExchangeClient(privateKey);
+  const asset = await getAssetIndex(coin);
+
+  const open = (await infoClient.openOrders({ user: address })) as Array<{
+    coin: string;
+    oid: number;
+    reduceOnly?: boolean;
+  }>;
+
+  const targets = open
+    .filter((o) => o.coin === coin && o.reduceOnly === true)
+    .map((o) => o.oid);
+
+  if (targets.length === 0) return;
+
+  await client.cancel({
+    cancels: targets.map((oid) => ({ a: asset, o: oid })),
+  });
+}
+
+// Attaches exchange-side stop-loss + take-profit market-on-trigger orders so
+// the levels set by the bot are honoured by Hyperliquid itself (even if this
+// process is offline). Both orders are reduce-only and placed with the
+// `positionTpsl` grouping, so Hyperliquid scales their size along with the
+// position (e.g., after the bot closes half at the 1x partial-TP point) and
+// drops them once the position is fully closed. When a trade has no stop
+// loss, a stop is placed at the liquidation price as a last-resort exit.
+export async function placeTriggerOrders(
+  privateKey: string,
+  address: string,
+  coin: string,
+  isLong: boolean,
+  entryPrice: number,
+  size: number,
+  stopLoss: number | null,
+  takeProfit: number | null,
+  liquidationPrice: number
+): Promise<HlTriggerPlacement> {
+  // Clear any stale reduce-only triggers on this coin first so a restarted
+  // position never inherits orders that were meant for a closed one.
+  await cancelTriggerOrdersForCoin(privateKey, address, coin).catch((err) =>
+    console.error(`[Triggers] Pre-cancel for ${coin} failed (non-fatal):`, err)
+  );
+
+  const client = await createExchangeClient(privateKey);
+  const szDecimals = await getSzDecimals(coin);
+  const asset = await getAssetIndex(coin);
+
+  const orders: Array<{
+    a: number;
+    b: boolean;
+    p: string;
+    s: string;
+    r: boolean;
+    t: { trigger: { isMarket: boolean; triggerPx: string; tpsl: 'sl' | 'tp' } };
+  }> = [];
+
+  const stopLevel = stopLoss ?? liquidationPrice;
+  if (Number.isFinite(stopLevel) && stopLevel > 0) {
+    const onSide = isLong ? stopLevel < entryPrice : stopLevel > entryPrice;
+    const s = formatHlSize(size, szDecimals);
+    const p = formatHlPrice(stopLevel, szDecimals);
+    if (onSide && s && p) {
+      orders.push({
+        a: asset,
+        b: !isLong,
+        p,
+        s,
+        r: true,
+        t: { trigger: { isMarket: true, triggerPx: p, tpsl: 'sl' } },
+      });
+    }
+  }
+
+  const tp = takeProfit;
+  if (Number.isFinite(tp) && tp !== null && tp > 0) {
+    const onSide = isLong ? tp > entryPrice : tp < entryPrice;
+    const s = formatHlSize(size, szDecimals);
+    const p = formatHlPrice(tp, szDecimals);
+    if (onSide && s && p) {
+      orders.push({
+        a: asset,
+        b: !isLong,
+        p,
+        s,
+        r: true,
+        t: { trigger: { isMarket: true, triggerPx: p, tpsl: 'tp' } },
+      });
+    }
+  }
+
+  if (orders.length === 0) {
+    return { stopLossPoint: stopLevel, takeProfitPoint: takeProfit, placedCount: 0 };
+  }
+
+  await client.order({
+    orders,
+    grouping: 'positionTpsl',
+  });
+
+  return {
+    stopLossPoint: stopLevel,
+    takeProfitPoint: takeProfit,
+    placedCount: orders.length,
+  };
+}
+
 export async function generateAndApproveAgent(
   mainWalletPrivateKey: string
 ): Promise<{ apiAddress: string; apiPrivateKey: string }> {
