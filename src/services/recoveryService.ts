@@ -1,6 +1,6 @@
 import { getAllWallets } from '../db/repositories/wallets';
 import { getUserPositions, deletePosition } from '../db/repositories/positions';
-import { getUserOpenPositions as getHlOpenPositions } from './hyperliquidService';
+import { getUserState } from './hyperliquidService';
 
 export async function recoverRealPositions(): Promise<void> {
   console.log('[Recovery] Checking real positions on Hyperliquid vs DB...');
@@ -10,15 +10,18 @@ export async function recoverRealPositions(): Promise<void> {
   for (const wallet of wallets) {
     if (!wallet.address) continue;
 
-    const [hlPositions, dbPositions] = await Promise.all([
-      getHlOpenPositions(wallet.address),
-      getUserPositions(wallet.chatId),
-    ]);
+    let hlCoins: Set<string>;
+    try {
+      const state = await getUserState(wallet.address);
+      hlCoins = new Set(state.assetPositions.map((ap) => ap.position.coin));
+    } catch (err) {
+      console.error(`[Recovery] HL state fetch failed for chat ${wallet.chatId} — skipping cleanup:`, err);
+      continue;
+    }
 
+    const dbPositions = await getUserPositions(wallet.chatId);
     const realDbPositions = dbPositions.filter(p => p.accountMode === 'real');
     if (realDbPositions.length === 0) continue;
-
-    const hlCoins = new Set(hlPositions.map(p => p.coin));
 
     for (const dbPos of realDbPositions) {
       const coin = dbPos.symbol.replace('USDT', '').replace('USDC', '');

@@ -15,6 +15,7 @@ import { getCurrentPrice } from '../mexc/client';
 import {
   getUserUsdcBalance,
   getUserOpenPositions as getHlOpenPositions,
+  getUserState,
   placeMarketOrder,
   placeLimitOrder,
   setLeverage,
@@ -32,6 +33,7 @@ import type {
   TradeDecision,
   TradeDirection,
   TradeMode,
+  Wallet,
 } from '../types';
 
 function toHlCoin(symbol: string): string {
@@ -294,8 +296,6 @@ export async function executeRealMultipleTrades(
       throw new Error('No new coin pairs available to trade.');
     }
 
-    freshDecisions = applyTopConfidenceNoSl(freshDecisions);
-
     const results: ActivePosition[] = [];
     const mids = await getAllMids();
 
@@ -330,10 +330,24 @@ export async function executeRealMultipleTrades(
           await placeMarketOrder(pk, coin, decision.direction === 'LONG', sizeStr, priceStr, false);
         }
 
-        const ordersResponse = await getHlOpenPositions(wallet.address);
-        const match = ordersResponse.find(
-          (p: any) => p.coin === coin && parseFloat(p.szi) > 0 === (decision.direction === 'LONG')
-        );
+        let state = await getUserState(wallet.address).catch(() => null);
+        if (!state) {
+          await new Promise((r) => setTimeout(r, 2000));
+          state = await getUserState(wallet.address).catch(() => null);
+        }
+        if (!state) {
+          throw new Error(
+            `Could not query Hyperliquid to confirm ${coin} fill — position may be open, verify manually.`
+          );
+        }
+
+        const match = state.assetPositions
+          .map((ap) => ap.position)
+          .find(
+            (p) =>
+              p.coin === coin &&
+              (parseFloat(p.szi) > 0) === (decision.direction === 'LONG')
+          );
 
         if (!match) {
           throw new Error(
@@ -374,12 +388,15 @@ export async function executeRealMultipleTrades(
 }
 
 export async function autoStartTrade(
-  chatId: number
+  chatId: number,
+  modeOverride?: AccountMode
 ): Promise<ActivePosition | null> {
   const user = await getUser(chatId);
   if (!user?.lastTradeAmount) return null;
 
-  if (user.accountMode === 'real') {
+  const mode: AccountMode = modeOverride ?? user.accountMode;
+
+  if (mode === 'real') {
     const wallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
     if (!wallet) return null;
     const hlBalance = await getUserUsdcBalance(wallet.address);
@@ -392,7 +409,7 @@ export async function autoStartTrade(
   const amount = Math.min(user.lastTradeAmount, user.usdtBalance);
   if (amount <= 0) return null;
 
-  const positions = await executeMultipleTrades(chatId, amount, 1);
+  const positions = await executeMultipleTrades(chatId, amount, 1, 'simulation');
   return positions[0] ?? null;
 }
 
@@ -467,6 +484,15 @@ export async function closePositionByMessage(
   return closePositionById(position.id!, chatId, status, overrideExitPrice);
 }
 
+export async function closePositionRecord(
+  positionId: number,
+  chatId: number,
+  status: 'Ended..' | 'Stopped',
+  overrideExitPrice?: number
+): Promise<{ position: ActivePosition; result: ClosePositionResult }> {
+  return closePositionById(positionId, chatId, status, overrideExitPrice);
+}
+
 export async function closeAllPositions(
   chatId: number,
   status: 'Ended..' | 'Stopped'
@@ -497,31 +523,48 @@ async function closePositionById(
 
   let exitPrice = overrideExitPrice ?? 0;
   let actualPnl = 0;
+  let realWallet: Wallet | null = null;
 
   if (position.accountMode === 'real') {
-    try {
-      const wallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
-      if (wallet?.privateKey) {
-        const coin = toHlCoin(position.symbol);
-        const hlPositions = await getHlOpenPositions(wallet.address);
-        const hlPos = hlPositions.find((p: any) => p.coin === coin);
+    realWallet = await (await import('../db/repositories/wallets')).getWallet(chatId);
+    if (!realWallet?.privateKey) {
+      throw new Error('[Close] No wallet found for real position — cannot close safely.');
+    }
 
-        if (hlPos) {
-          const sizeNum = parseFloat(hlPos.szi);
-          const isLong = sizeNum > 0;
-          const tradingKey = wallet.apiWalletPrivateKey ?? wallet.privateKey;
-          const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
-          const currentPrice = await getCoinPrice(coin);
-          const closeSize = Math.abs(sizeNum).toString();
+    const coin = toHlCoin(position.symbol);
+    const hlPositions = await getHlOpenPositions(realWallet.address);
+    const hlPos = hlPositions.find((p: any) => p.coin === coin);
 
-          await closeHlPosition(pk, coin, closeSize, currentPrice.toString(), isLong);
+    if (hlPos) {
+      const sizeNum = parseFloat(hlPos.szi);
+      const isLong = sizeNum > 0;
+      const tradingKey = realWallet.apiWalletPrivateKey ?? realWallet.privateKey;
+      const pk = tradingKey.startsWith('0x') ? tradingKey : '0x' + tradingKey;
+      const currentPrice = await getCoinPrice(coin);
 
-          exitPrice = exitPrice || currentPrice;
-          actualPnl = parseFloat(hlPos.unrealizedPnl);
-        }
+      if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+        throw new Error(`[Close] Cannot price ${coin} — position remains open.`);
       }
-    } catch (err) {
-      console.error('[Close HL Position Error]', err);
+
+      const closeSize = Math.abs(sizeNum).toString();
+
+      await closeHlPosition(pk, coin, closeSize, currentPrice.toString(), isLong);
+
+      exitPrice = exitPrice || currentPrice;
+      actualPnl = parseFloat(hlPos.unrealizedPnl);
+    } else {
+      // This path must only finalize when the position is genuinely gone from
+      // the exchange. getHlOpenPositions swallows API errors into an empty
+      // list, so verify against a throwing state call before settling.
+      const state = await getUserState(realWallet.address).catch(() => null);
+      if (!state) {
+        throw new Error(`[Close] Cannot verify ${coin} on Hyperliquid — position remains open.`);
+      }
+      const stillOpen = state.assetPositions.some((ap) => ap.position.coin === coin);
+      if (stillOpen) {
+        throw new Error(`[Close] ${coin} still open on Hyperliquid — position remains open.`);
+      }
+      actualPnl = 0;
     }
   }
 
@@ -544,8 +587,9 @@ async function closePositionById(
 
   let pnlUsdt: number;
 
-  if (position.accountMode === 'real' && actualPnl !== 0) {
-    // Exchange truth: unrealizedPnl of the remaining (post-1st-TP) position.
+  if (position.accountMode === 'real') {
+    // For real trades the exchange is the ledger: unrealizedPnl of the
+    // position just before the reduce-only close is the result of this leg.
     pnlUsdt = actualPnl;
   } else if (position.partialTpHit) {
     // 1st TP already paid out allocatedAmount (margin-half + profit-half).
@@ -591,8 +635,16 @@ async function closePositionById(
 
   await deletePosition(positionId);
 
-  const newBalance = Math.max(0, user.usdtBalance + pnlUsdt);
-  await updateUserBalance(chatId, newBalance);
+  let newBalance = user.usdtBalance;
+
+  if (position.accountMode === 'real') {
+    if (realWallet) {
+      newBalance = await getUserUsdcBalance(realWallet.address).catch(() => user.usdtBalance);
+    }
+  } else {
+    newBalance = Math.max(0, user.usdtBalance + pnlUsdt);
+    await updateUserBalance(chatId, newBalance);
+  }
 
   return {
     position,

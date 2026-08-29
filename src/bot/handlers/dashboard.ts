@@ -18,7 +18,10 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
       return;
     }
 
-    if (user.accountMode === 'real') {
+    const positions = await (await import('../../db/repositories/positions')).getUserPositions(chatId);
+    const hasRealPosition = positions.some((p) => p.accountMode === 'real');
+
+    if (user.accountMode === 'real' || hasRealPosition) {
       let wallet, balances, hlBalance;
       try {
         wallet = await getWallet(chatId);
@@ -45,7 +48,6 @@ export function registerDashboardHandler(bot: Telegraf<Context>): void {
       return;
     }
 
-    const positions = await (await import('../../db/repositories/positions')).getUserPositions(chatId);
     const hasPositions = positions.length > 0;
     const text = buildDashboardText(
       user.address,

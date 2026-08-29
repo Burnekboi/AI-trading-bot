@@ -79,6 +79,22 @@ async function deletePromptMessages(
   }
 }
 
+async function replyRealDashboard(ctx: Context, chatId: number): Promise<void> {
+  const wallet = await getWallet(chatId);
+  let balances;
+  let hlBalance: number | undefined;
+  if (wallet) {
+    balances = await getWalletBalances(wallet.address).catch(() => undefined);
+    hlBalance = await getUserUsdcBalance(wallet.address).catch(() => undefined);
+  }
+  const text = buildRealDashboardText(wallet, balances, hlBalance);
+  await ctx.reply(text, {
+    parse_mode: 'HTML',
+    link_preview_options: { is_disabled: true },
+    ...realDashboardKeyboard(wallet !== null),
+  });
+}
+
 async function processTradeAmount(
   ctx: Context,
   chatId: number,
@@ -587,16 +603,20 @@ export function registerStopTradingHandler(bot: Telegraf<Context>): void {
       const remaining = (await getUserPositions(chatId)).length;
       const user = await getUser(chatId);
       if (user) {
-        const dashboard = buildDashboardText(
-          user.address,
-          user.usdtBalance,
-          user.usdcBalance,
-          user.accountMode
-        );
-        await ctx.reply(dashboard, {
-          parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0),
-        });
+        if (position.accountMode === 'real' || user.accountMode === 'real') {
+          await replyRealDashboard(ctx, chatId);
+        } else {
+          const dashboard = buildDashboardText(
+            user.address,
+            user.usdtBalance,
+            user.usdcBalance,
+            user.accountMode
+          );
+          await ctx.reply(dashboard, {
+            parse_mode: 'HTML',
+            ...mainDashboardKeyboard(remaining > 0),
+          });
+        }
       }
     } catch (error) {
       const message =
@@ -618,7 +638,9 @@ export function registerStopAllHandler(bot: Telegraf<Context>): void {
       const totalPnl = results.reduce((s, r) => s + r.result.pnlUsdt, 0);
       const user = await getUser(chatId);
 
-      if (ctx.callbackQuery?.message && user) {
+      const hasReal = results.some((r) => r.position.accountMode === 'real');
+
+      if (ctx.callbackQuery?.message && user && !hasReal) {
         const dashboard = buildDashboardText(
           user.address,
           user.usdtBalance,
@@ -636,6 +658,10 @@ export function registerStopAllHandler(bot: Telegraf<Context>): void {
         `Total PnL: <b>${totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}</b> USDT`,
         { parse_mode: 'HTML' }
       );
+
+      if (hasReal && user) {
+        await replyRealDashboard(ctx, chatId);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to stop trades.';
@@ -656,16 +682,21 @@ export function registerStopLastHandler(bot: Telegraf<Context>): void {
       const user = await getUser(chatId);
 
       if (ctx.callbackQuery?.message && user) {
-        const dashboard = buildDashboardText(
-          user.address,
-          user.usdtBalance,
-          user.usdcBalance,
-          user.accountMode
-        );
-        await ctx.editMessageText(dashboard, {
-          parse_mode: 'HTML',
-          ...mainDashboardKeyboard(remaining > 0),
-        });
+        const dashIsReal = position.accountMode === 'real' || user.accountMode === 'real';
+        if (dashIsReal) {
+          await replyRealDashboard(ctx, chatId);
+        } else {
+          const dashboard = buildDashboardText(
+            user.address,
+            user.usdtBalance,
+            user.usdcBalance,
+            user.accountMode
+          );
+          await ctx.editMessageText(dashboard, {
+            parse_mode: 'HTML',
+            ...mainDashboardKeyboard(remaining > 0),
+          });
+        }
       }
 
       await ctx.reply(
@@ -698,7 +729,10 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
     clearSession(chatId);
     await setUserStep(chatId, null);
 
-    if (pendingMode === 'real' || user.accountMode === 'real') {
+    const positions = await getUserPositions(chatId);
+    const hasRealPosition = positions.some((p) => p.accountMode === 'real');
+
+    if (pendingMode === 'real' || user.accountMode === 'real' || hasRealPosition) {
       let wallet, balances, hlBalance;
       try {
         wallet = await getWallet(chatId);
@@ -716,7 +750,6 @@ export function registerBackToDashboardHandler(bot: Telegraf<Context>): void {
       return;
     }
 
-    const positions = await getUserPositions(chatId);
     const hasPositions = positions.length > 0;
     const text = buildDashboardText(
       user.address,
@@ -797,9 +830,14 @@ export function registerActivityHandlers(bot: Telegraf<Context>): void {
   });
 }
 
-async function showDashboard(ctx: Context, user: UserProfile, hasPositions: boolean): Promise<void> {
+async function showDashboard(
+  ctx: Context,
+  user: UserProfile,
+  hasPositions: boolean,
+  hasRealPosition = false
+): Promise<void> {
   try {
-    if (user.accountMode === 'real') {
+    if (user.accountMode === 'real' || hasRealPosition) {
       const wallet = await getWallet(user.chatId).catch((err) => {
         console.error('[showDashboard] wallet fetch failed:', err);
         return undefined;
@@ -950,7 +988,12 @@ async function switchMode(ctx: Context, chatId: number, mode: AccountMode): Prom
   user.accountMode = mode;
 
   const positions = await getUserPositions(chatId);
-  await showDashboard(ctx, user, positions.length > 0);
+  await showDashboard(
+    ctx,
+    user,
+    positions.length > 0,
+    positions.some((p) => p.accountMode === 'real')
+  );
 }
 
 export function registerModeHandlers(bot: Telegraf<Context>): void {

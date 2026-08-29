@@ -220,7 +220,8 @@ export function buildActivePositionText(position: ActivePosition): string {
 
 export function buildClosedPositionText(
   position: ActivePosition,
-  result: ClosePositionResult
+  result: ClosePositionResult,
+  closedExternally = false
 ): string {
   const emoji = directionEmoji(position.direction);
   const pair = formatSymbolDisplay(position.symbol);
@@ -232,6 +233,9 @@ export function buildClosedPositionText(
   if (result.status === 'Stopped') {
     statusEmoji = '🛑';
     statusText = 'STOPPED';
+  } else if (closedExternally) {
+    statusEmoji = '🔔';
+    statusText = 'CLOSED';
   } else if (isWin) {
     statusEmoji = '🟢';
     statusText = 'TARGET HIT';
@@ -243,13 +247,15 @@ export function buildClosedPositionText(
     statusText = 'STOP LOSS HIT';
   }
 
-  const slOrTpLine = isWin && position.targetProfit
-    ? `🎯 Target profit: ${formatPrice(position.targetProfit)}`
-    : !isWin && position.stopLoss
-      ? `🔴 Stop loss: ${formatPrice(position.stopLoss)}`
-      : !isWin
-        ? `🔴 Stop loss: None (liq @ ${formatPrice(liquidationPrice(position))})`
-        : '';
+  const slOrTpLine = closedExternally
+    ? ''
+    : isWin && position.targetProfit
+      ? `🎯 Target profit: ${formatPrice(position.targetProfit)}`
+      : !isWin && position.stopLoss
+        ? `🔴 Stop loss: ${formatPrice(position.stopLoss)}`
+        : !isWin
+          ? `🔴 Stop loss: None (liq @ ${formatPrice(liquidationPrice(position))})`
+          : '';
 
   const partialTpLine = position.partialTpHit
     ? `✅ 1st TP: HIT (+${formatBalance(position.allocatedAmount)} USDT taken out)\n`
@@ -266,8 +272,10 @@ export function buildClosedPositionText(
     (slOrTpLine ? `${slOrTpLine}\n` : '') +
     partialTpLine +
     `${statusEmoji} STATUS: ${statusText}\n` +
-    `💵 ${formatPnl(result.pnlUsdt)}${pnlLabel}\n` +
-    `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`
+    (closedExternally
+      ? `ℹ️ Closed on the exchange (outside the bot).`
+      : `💵 ${formatPnl(result.pnlUsdt)}${pnlLabel}\n` +
+        `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`)
   );
 }
 
