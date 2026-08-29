@@ -396,12 +396,24 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
     }
   }
 
-  if (candidates.length === 0) {
-    throw new Error('Hyperliquid market sweep failed: no candidate assets met signal criteria');
+  const usable = candidates.filter(
+    (c) => c.availableLeverage >= MIN_LEVERAGE,
+  );
+  const skippedLeverage = candidates.length - usable.length;
+  if (skippedLeverage > 0) {
+    console.log(
+      `[HL AI Engine] Skipped ${skippedLeverage} candidate(s) that cannot take ${MIN_LEVERAGE}x+ leverage`,
+    );
   }
 
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates;
+  if (usable.length === 0) {
+    throw new Error(
+      'Hyperliquid market sweep failed: no candidate assets can be traded at the bot 15-50x leverage',
+    );
+  }
+
+  usable.sort((a, b) => b.score - a.score);
+  return usable;
 }
 
 export async function runHlMarketSweep(): Promise<TradeDecision> {

@@ -38,6 +38,8 @@ import type {
   Wallet,
 } from '../types';
 
+const MIN_LEVERAGE = 15;
+
 function toHlCoin(symbol: string): string {
   return symbol.replace('USDT', '').replace('USDC', '');
 }
@@ -311,10 +313,19 @@ export async function executeRealMultipleTrades(
         const currentPrice = parseFloat(midPriceStr);
 
         // Hyperliquid caps leverage per asset (BTC 40x, most alts 20-50x).
-        // Clamp the AI's choice to the exchange limit so orders don't reject.
+        // Clamp the AI's choice to the exchange limit so orders don't reject,
+        // but never trade below the bot's MIN_LEVERAGE floor.
         const meta = await getCoinMeta(coin);
         const maxLev = meta?.maxLeverage ?? 20;
         const effectiveLeverage = Math.min(decision.leverage, maxLev);
+
+        if (effectiveLeverage < MIN_LEVERAGE) {
+          console.warn(
+            `[RealTrade HL] Skipping ${coin}: pair only allows ${maxLev}x, ` +
+              `below bot minimum ${MIN_LEVERAGE}x. Finding another pair.`
+          );
+          continue;
+        }
 
         const rawSize = (amountPerPair * effectiveLeverage) / currentPrice;
 
