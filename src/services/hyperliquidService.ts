@@ -441,10 +441,11 @@ export interface HlTriggerPlacement {
   placedCount: number;
 }
 
-// Cancels every resting reduce-only order on a coin. The bot's TP/SL entries
-// are reduce-only market-on-trigger orders placed with `positionTpsl`
-// grouping, so this reliably targets exactly those (and nothing else the user
-// has resting that is not reduce-only).
+// Cancels every resting trigger order on a coin. Position TP/SL orders may be
+// returned by HL as parent orders with nested `children` (each leg has its own
+// oid), so both levels are collected. The exchange also auto-consumes a leg
+// once it fills, which can make a batch cancel throw — in that case we retry
+// each oid individually so one already-filled order never blocks the rest.
 export async function cancelTriggerOrdersForCoin(
   privateKey: string,
   address: string,
@@ -454,21 +455,60 @@ export async function cancelTriggerOrdersForCoin(
   const client = await createExchangeClient(privateKey);
   const asset = await getAssetIndex(coin);
 
-  const open = (await infoClient.openOrders({ user: address })) as Array<{
-    coin: string;
-    oid: number;
+  const open = (await infoClient.openOrders({ user: address })) as unknown as Array<{
+    coin?: string;
+    oid?: number;
     reduceOnly?: boolean;
+    isPositionTpsl?: boolean;
+    triggerPx?: string;
+    orderType?: string;
+    children?: Array<{ oid?: number }>;
   }>;
 
-  const targets = open
-    .filter((o) => o.coin === coin && o.reduceOnly === true)
-    .map((o) => o.oid);
+  const targets = new Set<number>();
 
-  if (targets.length === 0) return;
+  const collect = (order: {
+    coin?: string;
+    oid?: number;
+    reduceOnly?: boolean;
+    isPositionTpsl?: boolean;
+    triggerPx?: string;
+    orderType?: string;
+    children?: Array<{ oid?: number }>;
+  }): void => {
+    if (order.coin !== coin) return;
+    const isTrigger =
+      order.reduceOnly === true ||
+      order.isPositionTpsl === true ||
+      typeof order.triggerPx === 'string' ||
+      (typeof order.orderType === 'string' &&
+        (order.orderType.includes('Stop') || order.orderType.includes('Take Profit')));
+    if (!isTrigger) return;
+    if (typeof order.oid === 'number') targets.add(order.oid);
+    if (Array.isArray(order.children)) {
+      for (const child of order.children) {
+        if (child && typeof child.oid === 'number') targets.add(child.oid);
+      }
+    }
+  };
 
-  await client.cancel({
-    cancels: targets.map((oid) => ({ a: asset, o: oid })),
-  });
+  open.forEach(collect);
+
+  if (targets.size === 0) return;
+
+  const cancels = [...targets].map((o) => ({ a: asset, o }));
+  try {
+    await client.cancel({ cancels });
+    return;
+  } catch (err) {
+    console.error(`[Cancels] Batch cancel failed for ${coin}, retrying per order:`, err);
+  }
+
+  for (const oid of targets) {
+    await client.cancel({ cancels: [{ a: asset, o: oid }] }).catch((e) =>
+      console.error(`[Cancels] Could not cancel oid ${oid} for ${coin}:`, e)
+    );
+  }
 }
 
 // Attaches exchange-side stop-loss + take-profit market-on-trigger orders so
