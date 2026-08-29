@@ -83,6 +83,7 @@ export interface TradeDecision {
   rsi: number;
   adx: number;
   volatility: number;
+  noStopLoss?: boolean;
 }
 
 export interface ClosePositionResult {

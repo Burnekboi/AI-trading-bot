@@ -77,22 +77,6 @@ function pickFreshDecisions(
 // The bot's "win guarantee" stance: on the single highest-confidence signal of
 // a batch, drop the stop-loss so the position is held purely on the AI's
 // conviction. Every other trade keeps its stop-loss + liquidation protection.
-// This is intentionally capped to ONE trade per sweep so no-SL exposure stays
-// bounded (a wrong no-SL call can still be liquidated for the full margin).
-function applyTopConfidenceNoSl(decisions: TradeDecision[]): TradeDecision[] {
-  if (decisions.length === 0) return decisions;
-  const topIndex = decisions.reduce(
-    (bestIdx, d, i, arr) =>
-      (d.exploitabilityScore ?? 0) > (arr[bestIdx].exploitabilityScore ?? 0)
-        ? i
-        : bestIdx,
-    0
-  );
-  return decisions.map((d, i) =>
-    i === topIndex ? { ...d, stopLoss: null } : d
-  );
-}
-
 export function calculatePnl(
   direction: TradeDirection,
   entryPrice: number,
@@ -225,11 +209,17 @@ export async function executeMultipleTrades(
       throw new Error('No new coin pairs available to trade.');
     }
 
-    freshDecisions = applyTopConfidenceNoSl(freshDecisions);
-
     const results: ActivePosition[] = [];
+    let noSlOpen = existingPositions.some((p) => p.stopLoss === null);
 
     for (const decision of freshDecisions) {
+      const useNoSl = decision.noStopLoss === true && !noSlOpen;
+      if (decision.noStopLoss === true && noSlOpen) {
+        console.warn(
+          `[Sim] Keeping SL on ${decision.symbol}: a no-SL position is already open`
+        );
+      }
+
       const position: ActivePosition = {
         chatId,
         messageId: 0,
@@ -237,7 +227,7 @@ export async function executeMultipleTrades(
         direction: decision.direction,
         allocatedAmount: amountPerPair,
         entryPrice: decision.entryPrice,
-        stopLoss: decision.stopLoss,
+        stopLoss: useNoSl ? null : decision.stopLoss,
         targetProfit: decision.targetProfit,
         leverage: decision.leverage,
         strategyName: decision.strategyName,
@@ -248,6 +238,7 @@ export async function executeMultipleTrades(
 
       await savePosition(position);
       results.push(position);
+      if (useNoSl) noSlOpen = true;
     }
 
     return results;
@@ -304,6 +295,7 @@ export async function executeRealMultipleTrades(
     const mids = await getAllMids();
 
     let failed = 0;
+    let noSlOpen = existingPositions.some((p) => p.stopLoss === null);
 
     for (const decision of freshDecisions) {
       try {
@@ -311,6 +303,16 @@ export async function executeRealMultipleTrades(
         const midPriceStr = mids[coin];
         if (!midPriceStr) throw new Error(`No mid price for ${coin}`);
         const currentPrice = parseFloat(midPriceStr);
+
+        // The AI decides SL vs no-SL per candidate (engine). We only re-check
+        // a boundedness guard here: if a no-SL position is already open, this
+        // one falls back to its SL so naked exposure stays at one position.
+        const useNoSl = decision.noStopLoss === true && !noSlOpen;
+        if (decision.noStopLoss === true && noSlOpen) {
+          console.warn(
+            `[RealTrade HL] Keeping SL on ${decision.symbol}: a no-SL position is already open`
+          );
+        }
 
         // Hyperliquid caps leverage per asset (BTC 40x, most alts 20-50x).
         // Clamp the AI's choice to the exchange limit so orders don't reject,
@@ -375,7 +377,7 @@ export async function executeRealMultipleTrades(
           direction: decision.direction,
           allocatedAmount: amountPerPair,
           entryPrice: parseFloat(match.entryPx),
-          stopLoss: decision.stopLoss,
+          stopLoss: useNoSl ? null : decision.stopLoss,
           targetProfit: decision.targetProfit,
           leverage: effectiveLeverage,
           strategyName: decision.strategyName,
@@ -386,6 +388,13 @@ export async function executeRealMultipleTrades(
 
         await savePosition(position);
         results.push(position);
+        if (useNoSl) noSlOpen = true;
+
+        if (useNoSl) {
+          console.warn(
+            `[RealTrade HL] ${coin} opened WITHOUT a stop loss (AI decision, confidence=${decision.exploitabilityScore.toFixed(1)})`
+          );
+        }
 
         try {
           const liqPrice = getLiquidationPrice(

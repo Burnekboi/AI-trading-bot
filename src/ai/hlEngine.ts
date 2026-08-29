@@ -38,6 +38,7 @@ interface ScoredCandidate {
   scoreReason: string;
   stopLoss: number | null;
   targetProfit: number;
+  noStopLoss: boolean;
 }
 
 // The bot trades at 15x min / 50x max — this is the leverage it SETS on a
@@ -47,6 +48,15 @@ interface ScoredCandidate {
 // `availableLeverage` is kept for logging only.
 const MIN_LEVERAGE = 15;
 const MAX_LEVERAGE = 50;
+
+// The algorithm decides whether a trade runs with or without a stop loss.
+// A candidate is trusted to trade WITHOUT an SL only when its confidence
+// clears a strict bar while volatility stays controlled — i.e. the AI only
+// "goes naked" when the edge is high and the coin is not unstable enough to
+// wipe the margin before thesis plays out. Everything else always keeps its
+// SL. At most one no-SL trade is allowed to be open at a time.
+const NO_SL_CONFIDENCE_THRESHOLD = 75;
+const NO_SL_MAX_VOLATILITY = 3;
 
 function findDynamicSLTP(
   highs: number[],
@@ -216,6 +226,12 @@ async function scoreCandidate(
   );
   let stopLoss: number | null = rawSL;
 
+  // ALGORITHM DECISION: this trade runs WITHOUT a stop loss when confidence
+  // clears the strict bar AND volatility is controlled. Otherwise it keeps
+  // its SL. The AI decides per candidate — no forced top-pick rule.
+  const noStopLoss =
+    score >= NO_SL_CONFIDENCE_THRESHOLD && volatility <= NO_SL_MAX_VOLATILITY;
+
   // Conservative leverage: keep the 15x floor but stop pushing toward 100x.
   // The wider the stop, the lower the leverage, so liquidation always stays
   // beyond the stop and we never blow up a position.
@@ -224,10 +240,17 @@ async function scoreCandidate(
   if (volatility > 5) leverage -= 6;
   if (adx > 38) leverage += 5;
   if (strategyName === STRATEGY_BREAKOUT && adx > 28) leverage += 5;
-  if (stopLoss !== null) {
-    const slDistancePct = (Math.abs(entryPrice - stopLoss) / entryPrice) * 100;
-    if (slDistancePct > 6) leverage = Math.min(leverage, 20);
-    if (slDistancePct > 9) leverage = 15;
+
+  if (noStopLoss) {
+    reasons.push(`no-SL (confidence ${score.toFixed(0)})`);
+  }
+
+  if (!noStopLoss) {
+    if (stopLoss !== null) {
+      const slDistancePct = (Math.abs(entryPrice - stopLoss) / entryPrice) * 100;
+      if (slDistancePct > 6) leverage = Math.min(leverage, 20);
+      if (slDistancePct > 9) leverage = 15;
+    }
   }
   leverage = Math.max(MIN_LEVERAGE, Math.min(MAX_LEVERAGE, leverage + learning.levAdjust));
 
@@ -235,7 +258,7 @@ async function scoreCandidate(
     reasons.push(`learn adj`);
   }
 
-  if (stopLoss !== null && leverage > 0) {
+  if (!noStopLoss && stopLoss !== null && leverage > 0) {
     // Liquidation distance shrinks as leverage rises. At 15-100x it is only
     // 1-6.7% from entry, while an ATR/swing stop is usually wider. When the
     // stop would sit *past* liquidation, the position used to run until it was
@@ -309,6 +332,7 @@ async function scoreCandidate(
     scoreReason: reasons.join(', ') || 'baseline',
     stopLoss,
     targetProfit,
+    noStopLoss,
   };
 }
 
@@ -318,13 +342,14 @@ function convertCandidate(c: ScoredCandidate): TradeDecision {
     direction: c.direction,
     strategyName: c.strategyName,
     entryPrice: c.entryPrice,
-    stopLoss: c.stopLoss,
+    stopLoss: c.noStopLoss ? null : c.stopLoss,
     targetProfit: c.targetProfit,
     leverage: c.leverage,
     exploitabilityScore: c.score,
     rsi: c.rsi,
     adx: c.adx,
     volatility: c.volatility,
+    noStopLoss: c.noStopLoss,
   };
 }
 
@@ -413,6 +438,28 @@ async function evaluateAllCandidates(): Promise<ScoredCandidate[]> {
   }
 
   usable.sort((a, b) => b.score - a.score);
+
+  // At most one no-SL candidate per sweep — always the highest-confidence one.
+  // Others keep their SL so aggregate naked exposure stays bounded.
+  let noSlKept = false;
+  let demoted = 0;
+  for (const c of usable) {
+    if (c.noStopLoss) {
+      if (noSlKept) {
+        c.noStopLoss = false;
+        demoted++;
+      } else {
+        noSlKept = true;
+      }
+    }
+  }
+  if (demoted > 0) {
+    console.log(
+      `[HL AI Engine] Kept only the top-confidence candidate with no SL; ` +
+        `${demoted} candidate(s) demoted back to stop-loss mode`
+    );
+  }
+
   return usable;
 }
 
@@ -422,7 +469,8 @@ export async function runHlMarketSweep(): Promise<TradeDecision> {
 
   console.log(
     `[HL AI Engine] Selected ${best.symbol} (score=${best.score.toFixed(1)}, ` +
-      `avail=${best.availableLeverage}x, ${best.scoreReason}) → ${best.direction} via ${best.strategyName} ${best.leverage}x`
+      `avail=${best.availableLeverage}x, ${best.scoreReason}) → ${best.direction} via ${best.strategyName} ${best.leverage}x` +
+      (best.noStopLoss ? ' — NO SL' : '')
   );
 
   return convertCandidate(best);
@@ -435,7 +483,8 @@ export async function runHlMarketSweepTopN(n: number): Promise<TradeDecision[]> 
   for (const c of top) {
     console.log(
       `[HL AI Engine] Selected ${c.symbol} (score=${c.score.toFixed(1)}, ` +
-        `avail=${c.availableLeverage}x, ${c.scoreReason}) → ${c.direction} via ${c.strategyName} ${c.leverage}x`
+        `avail=${c.availableLeverage}x, ${c.scoreReason}) → ${c.direction} via ${c.strategyName} ${c.leverage}x` +
+        (c.noStopLoss ? ' — NO SL' : '')
     );
   }
 
