@@ -85,6 +85,35 @@ async function notifyPositionClosed(
   }
 }
 
+async function autoReenter(
+  bot: Telegraf,
+  chatId: number,
+  accountMode: 'simulation' | 'real' | undefined
+): Promise<void> {
+  let next: ActivePosition | null = null;
+  for (let attempt = 1; attempt <= 3 && !next; attempt++) {
+    try {
+      next = await autoStartTrade(chatId, accountMode);
+    } catch (err) {
+      console.error(
+        `[Reentry] Attempt ${attempt}/${3} to auto-start a new trade for chat ${chatId} failed:`,
+        err
+      );
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 5000 * attempt));
+      }
+    }
+  }
+  if (!next) return;
+  const cardText = buildActivePositionText(next);
+  const msg = await bot.telegram.sendMessage(chatId, cardText, {
+    parse_mode: 'HTML',
+    ...positionKeyboard(next.symbol),
+  });
+  next.messageId = msg.message_id;
+  if (next.id) await setPositionMessageId(next.id, msg.message_id);
+}
+
 async function runMonitorTick(bot: Telegraf): Promise<void> {
   const positions = await getAllActivePositions();
 
@@ -139,6 +168,7 @@ async function runMonitorTick(bot: Telegraf): Promise<void> {
         );
         const text = buildClosedPositionText(position, result, true);
         await notifyPositionClosed(bot, position, text, true);
+        await autoReenter(bot, position.chatId, position.accountMode);
         continue;
       }
 
@@ -252,20 +282,7 @@ async function runMonitorTick(bot: Telegraf): Promise<void> {
       );
 
       if (slHit || tpHit || liqHit) {
-        const next = await autoStartTrade(position.chatId, position.accountMode);
-        if (next) {
-          const cardText = buildActivePositionText(next);
-          const msg = await bot.telegram.sendMessage(
-            position.chatId,
-            cardText,
-            {
-              parse_mode: 'HTML',
-              ...positionKeyboard(next.symbol),
-            }
-          );
-          next.messageId = msg.message_id;
-          if (next.id) await setPositionMessageId(next.id, msg.message_id);
-        }
+        await autoReenter(bot, position.chatId, position.accountMode);
       }
     } catch (error) {
       console.error(

@@ -234,8 +234,20 @@ export function buildClosedPositionText(
     statusEmoji = '🛑';
     statusText = 'STOPPED';
   } else if (closedExternally) {
-    statusEmoji = '🔔';
-    statusText = 'CLOSED';
+    const reason = classifyExit(position, result.exitPrice);
+    if (reason === 'tp') {
+      statusEmoji = '🟢';
+      statusText = 'TARGET HIT';
+    } else if (reason === 'sl') {
+      statusEmoji = '🔴';
+      statusText = 'STOP LOSS HIT';
+    } else if (reason === 'liq') {
+      statusEmoji = '💀';
+      statusText = 'LIQUIDATED';
+    } else {
+      statusEmoji = '🔔';
+      statusText = 'CLOSED';
+    }
   } else if (isWin) {
     statusEmoji = '🟢';
     statusText = 'TARGET HIT';
@@ -246,6 +258,9 @@ export function buildClosedPositionText(
     statusEmoji = '🔴';
     statusText = 'STOP LOSS HIT';
   }
+
+  const exitLine =
+    result.exitPrice > 0 ? `📍 Exit: ${formatPrice(result.exitPrice)}\n` : '';
 
   const slOrTpLine = closedExternally
     ? ''
@@ -269,14 +284,44 @@ export function buildClosedPositionText(
     `💰 ${formatBalance(position.allocatedAmount)} USDT\n` +
     `⚡ Leverage: ${position.leverage}x\n` +
     `🔵 Entry: ${formatPrice(position.entryPrice)}\n` +
+    exitLine +
     (slOrTpLine ? `${slOrTpLine}\n` : '') +
     partialTpLine +
     `${statusEmoji} STATUS: ${statusText}\n` +
     (closedExternally
-      ? `ℹ️ Closed on the exchange (outside the bot).`
+      ? `ℹ️ Closed by the exchange-side TP/SL trigger.\n` +
+        `💵 ${formatPnl(result.pnlUsdt)}${pnlLabel}\n` +
+        `💳 ${formatBalance(result.newBalance)} USDC (HL Balance)`
       : `💵 ${formatPnl(result.pnlUsdt)}${pnlLabel}\n` +
         `💳 ${formatBalance(result.newBalance)} USDT (Total Balance)`)
   );
+}
+
+function classifyExit(
+  position: ActivePosition,
+  exitPrice: number
+): 'tp' | 'sl' | 'liq' | 'unknown' {
+  if (!Number.isFinite(exitPrice) || exitPrice <= 0) return 'unknown';
+  const isLong = position.direction === 'LONG';
+
+  if (
+    position.targetProfit != null &&
+    (isLong ? exitPrice >= position.targetProfit : exitPrice <= position.targetProfit)
+  ) {
+    return 'tp';
+  }
+
+  if (
+    position.stopLoss != null &&
+    (isLong ? exitPrice <= position.stopLoss : exitPrice >= position.stopLoss)
+  ) {
+    return 'sl';
+  }
+
+  const liq = liquidationPrice(position);
+  if (isLong ? exitPrice <= liq : exitPrice >= liq) return 'liq';
+
+  return 'unknown';
 }
 
 export const AI_SCANNING_TEXT =

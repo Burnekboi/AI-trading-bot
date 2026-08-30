@@ -27,6 +27,7 @@ import {
   getAllMids,
   placeTriggerOrders,
   cancelTriggerOrdersForCoin,
+  getLastPositionCloseFill,
 } from './hyperliquidService';
 import type {
   AccountMode,
@@ -619,7 +620,23 @@ async function closePositionById(
       if (stillOpen) {
         throw new Error(`[Close] ${coin} still open on Hyperliquid — position remains open.`);
       }
-      actualPnl = 0;
+
+      // The exchange-side TP/SL trigger closed the position. Pull the actual
+      // fill so the exit message reports the real price and PnL instead of
+      // falling back to the current market price.
+      const lastFill = await getLastPositionCloseFill(
+        realWallet.address,
+        coin
+      ).catch(() => null);
+      if (lastFill) {
+        exitPrice = lastFill.fillPrice;
+        actualPnl = lastFill.closedPnl;
+        console.log(
+          `[Close] ${coin} was closed on the exchange at ${exitPrice} (PnL ${actualPnl.toFixed(2)})`
+        );
+      } else {
+        actualPnl = 0;
+      }
     }
 
     // The position is closed (or confirmed gone) — drop any leftover

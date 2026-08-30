@@ -266,6 +266,48 @@ export async function closePosition(
   return placeMarketOrder(privateKey, coin, !isLong, size, price, true);
 }
 
+export interface LastPositionFill {
+  fillPrice: number;
+  closedPnl: number;
+  fillTime: number;
+}
+
+// Returns the most recent fill that actually closed (or reduced) a position on
+// a coin. Used to report the real exit price/PnL when Hyperliquid's own TP/SL
+// trigger closed the position instead of the bot. A fill whose `startPosition`
+// is zero was an opening fill from flat, so it is filtered out.
+export async function getLastPositionCloseFill(
+  address: string,
+  coin: string
+): Promise<LastPositionFill | null> {
+  await init();
+  const fills = (await infoClient.userFills({
+    user: address,
+    aggregateByTime: true,
+  })) as unknown as Array<{
+    coin: string;
+    px: string;
+    startPosition: string;
+    closedPnl: string;
+    time: number;
+  }>;
+
+  const relevant = fills
+    .filter(
+      (f) => f.coin === coin && Number.isFinite(parseFloat(f.startPosition)) && parseFloat(f.startPosition) !== 0
+    )
+    .sort((a, b) => b.time - a.time);
+
+  const last = relevant[0];
+  if (!last) return null;
+
+  return {
+    fillPrice: parseFloat(last.px),
+    closedPnl: parseFloat(last.closedPnl),
+    fillTime: last.time,
+  };
+}
+
 export async function getCoinPrice(coin: string): Promise<number> {
   const mids = await getAllMids();
   const price = mids[coin];
